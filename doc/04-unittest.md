@@ -199,6 +199,164 @@ INFO: Build completed successfully, 2 total actions
 Executed 1 out of 1 test: 1 test passes.
 ```
 
+## テスト時にファイルを読み込む
+
+Bazelではテストはサンドボックス内で行われるため、依存を明示しない限りテスト時にファイルを読み込むことはできない。
+例えば今回のテストで `testdata` ディレクトリにファイルを配置し、テスト時に読み込むようなテストを記述してみる（本来そんな必要は無い）。
+まずテストのinputとoutputを定義したファイルを作成する。
+
+```bash
+mkdir -p internal/reverse/testdata
+echo -n "" > internal/reverse/testdata/empty_string_input.txt
+echo -n "" > internal/reverse/testdata/empty_string_output.txt
+echo -n "a" > internal/reverse/testdata/single_string_input.txt
+echo -n "a" > internal/reverse/testdata/single_string_output.txt
+echo -n "abc" > internal/reverse/testdata/multiple_string_input.txt
+echo -n "cba" > internal/reverse/testdata/multiple_string_output.txt
+```
+
+これらを使ってテストを書き直す。
+
+```go:internal/reverse/string_test.go
+package reverse_test
+
+import (
+	"os"
+	"testing"
+
+	"github.com/pddg/go-bazel-playground/internal/reverse"
+)
+
+func TestString(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name string
+	}{
+		{
+			name: "empty",
+		},
+		{
+			name: "single",
+		},
+		{
+			name: "multiple",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Setup
+			givenBytes, err := os.ReadFile("testdata/" + tt.name + "_string_input.txt")
+			if err != nil {
+				t.Fatal(err)
+			}
+			expectedBytes, err := os.ReadFile("testdata/" + tt.name + "_string_output.txt")
+			if err != nil {
+				t.Fatal(err)
+			}
+			given := string(givenBytes)
+			expected := string(expectedBytes)
+
+			// Exercise
+			actual := reverse.String(string(given))
+
+			// Verify
+			if actual != expected {
+				t.Errorf("expected: %s, actual: %s", expected, actual)
+			}
+		})
+	}
+}
+```
+
+このテストを実行すると、ファイルを読み込めずにエラーが発生する。
+
+```
+❯ bazel test //internal/reverse:reverse_test
+INFO: Analyzed target //internal/reverse:reverse_test (0 packages loaded, 0 targets configured).
+FAIL: //internal/reverse:reverse_test (see /home/pudding/.cache/bazel/_bazel_pudding/99730a75027f37c6494047af2b092bf0/execroot/_main/bazel-out/k8-fastbuild/testlogs/internal/reverse/reverse_test/test.log)
+INFO: From Testing //internal/reverse:reverse_test:
+==================== Test output for //internal/reverse:reverse_test:
+--- FAIL: TestString (0.00s)
+    --- FAIL: TestString/empty (0.00s)
+        string_test.go:31: open testdata/empty_string_input.txt: no such file or directory
+    --- FAIL: TestString/single (0.00s)
+        string_test.go:31: open testdata/single_string_input.txt: no such file or directory
+    --- FAIL: TestString/multiple (0.00s)
+        string_test.go:31: open testdata/multiple_string_input.txt: no such file or directory
+FAIL
+================================================================================
+INFO: Found 1 test target...
+Target //internal/reverse:reverse_test up-to-date:
+  bazel-bin/internal/reverse/reverse_test_/reverse_test
+INFO: Elapsed time: 0.467s, Critical Path: 0.31s
+INFO: 9 processes: 1 internal, 8 linux-sandbox.
+INFO: Build completed, 1 test FAILED, 9 total actions
+//internal/reverse:reverse_test                                          FAILED in 0.0s
+  /home/pudding/.cache/bazel/_bazel_pudding/99730a75027f37c6494047af2b092bf0/execroot/_main/bazel-out/k8-fastbuild/testlogs/internal/reverse/reverse_test/test.log
+
+Executed 1 out of 1 test: 1 fails locally.
+```
+
+このような外部のファイルを読み込むテストを実行する場合、`go_test` ルールの `data` パラメータで依存を明示することで、テスト実行時にこれらのファイルを持ち込めるようになる。
+
+次に `go_test` ルールの `data` パラメータにこのターゲットを追加する。なお、 `testdata` ディレクトリは慣習的に特別扱いされており、gazelleが自動的に追加してくれるため単に `bazel run //:gazelle` すればよい。
+
+```diff:internal/reverse/BUILD.bazel
+diff --git a/internal/reverse/BUILD.bazel b/internal/reverse/BUILD.bazel
+index aab058e..02eed9a 100644
+--- a/internal/reverse/BUILD.bazel
++++ b/internal/reverse/BUILD.bazel
+@@ -11,5 +11,6 @@ go_test(
+     name = "reverse_test",
+     size = "small",
+     srcs = ["string_test.go"],
++    data = glob(["testdata/**"]),
+     deps = [":reverse"],
+ )
+```
+
+これによりテストが成功するようになる。
+
+```
+❯ bazel test //internal/reverse:reverse_test
+INFO: Analyzed target //internal/reverse:reverse_test (2 packages loaded, 11 targets configured).
+INFO: Found 1 test target...
+Target //internal/reverse:reverse_test up-to-date:
+  bazel-bin/internal/reverse/reverse_test_/reverse_test
+INFO: Elapsed time: 0.204s, Critical Path: 0.03s
+INFO: 5 processes: 4 internal, 1 linux-sandbox.
+INFO: Build completed successfully, 5 total actions
+//internal/reverse:reverse_test                                          PASSED in 0.0s
+
+Executed 1 out of 1 test: 1 test passes.
+```
+
+Goの`embed`パッケージを使ってファイルを埋め込む場合は、 `data` ではなく `embedsrcs` パラメータにこれらのファイルを指定する。
+これもgazelleが自動的に行うため、単に `bazel run //:gazelle` すればよい。
+
+```diff:internal/reverse/BUILD.bazel
+diff --git a/internal/reverse/BUILD.bazel b/internal/reverse/BUILD.bazel
+index d206891..61f2d00 100644
+--- a/internal/reverse/BUILD.bazel
++++ b/internal/reverse/BUILD.bazel
+@@ -11,6 +11,13 @@ go_test(
+     name = "reverse_test",
+     size = "small",
+     srcs = ["string_test.go"],
+     data = glob(["testdata/**"]),
++    embedsrcs = [
++        "testdata/empty_string_input.txt",
++        "testdata/empty_string_output.txt",
++        "testdata/multiple_string_input.txt",
++        "testdata/multiple_string_output.txt",
++        "testdata/single_string_input.txt",
++        "testdata/single_string_output.txt",
++    ],
+     deps = [":reverse"],
+ )
+```
+
 ## Conclusion
 
 Bazelを使ってGoアプリケーションの単体テストを実行する方法を学んだ。

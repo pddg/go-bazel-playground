@@ -21,8 +21,8 @@ nogo(
     name = "my_nogo",
     visibility = ["//visibility:public"],
     deps = TOOLS_NOGO + [
+        "//analyzers/sample",
         "@com_github_gostaticanalysis_nilerr//:nilerr",
-        "//analyzers/sample:sample",
     ],
 )
 

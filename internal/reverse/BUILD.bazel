@@ -11,5 +11,14 @@ go_test(
     name = "reverse_test",
     size = "small",
     srcs = ["string_test.go"],
+    data = glob(["testdata/**"]),
+    embedsrcs = [
+        "testdata/empty_string_input.txt",
+        "testdata/empty_string_output.txt",
+        "testdata/multiple_string_input.txt",
+        "testdata/multiple_string_output.txt",
+        "testdata/single_string_input.txt",
+        "testdata/single_string_output.txt",
+    ],
     deps = [":reverse"],
 )
