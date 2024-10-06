@@ -1,4 +1,5 @@
 load("@gazelle//:def.bzl", "gazelle")
+load("@rules_go//go:def.bzl", "TOOLS_NOGO", "go_library", "nogo")
 
 # このprefixには、このリポジトリ自体のパスを指定する
 
@@ -14,4 +15,21 @@ gazelle(
         "-prune",
     ],
     command = "update-repos",
+)
+
+nogo(
+    name = "my_nogo",
+    visibility = ["//visibility:public"],
+    deps = TOOLS_NOGO + [
+        "@com_github_gostaticanalysis_nilerr//:nilerr",
+        "//analyzers/sample:sample",
+    ],
+)
+
+go_library(
+    name = "go-bazel-playground",
+    srcs = ["tools.go"],
+    importpath = "github.com/pddg/go-bazel-playground",
+    visibility = ["//visibility:private"],
+    deps = ["@com_github_gostaticanalysis_nilerr//:nilerr"],
 )
