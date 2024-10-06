@@ -1,0 +1,17 @@
+load("@gazelle//:def.bzl", "gazelle")
+
+# このprefixには、このリポジトリ自体のパスを指定する
+
+# gazelle:prefix github.com/pddg/go-bazel-playground
+gazelle(name = "gazelle")
+
+gazelle(
+    name = "update-go-repos",
+    args = [
+        "-from_file=go.mod",
+        "-to_macro=deps.bzl%go_repos",
+        "-bzlmod",
+        "-prune",
+    ],
+    command = "update-repos",
+)

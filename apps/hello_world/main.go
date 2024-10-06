@@ -1,7 +1,12 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/google/uuid"
+)
 
 func main() {
-    fmt.Println("Hello, World!")
+	uuidStr := uuid.NewString()
+	fmt.Printf("Hello, World!(%s)\n", uuidStr)
 }
