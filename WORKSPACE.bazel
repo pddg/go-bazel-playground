@@ -1,0 +1,3 @@
+# Use MODULE.bazel instead
+# 空のWORKSPACE.bazelを置いておかないとgazelleがSEGVする
+# Ref: https://github.com/bazelbuild/bazel-gazelle/issues/1895#issuecomment-2314855082
