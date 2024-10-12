@@ -1,4 +1,6 @@
 load("@rules_go//go:def.bzl", "go_binary", "go_cross_binary", "go_library")
+load("@rules_oci//oci:defs.bzl", "oci_image", "oci_load")
+load("@rules_pkg//:pkg.bzl", "pkg_tar")
 
 go_binary(
     name = "hello_world",
@@ -42,4 +44,23 @@ go_library(
         ],
         "//conditions:default": [],
     }),
+)
+
+pkg_tar(
+    name = "pkg",
+    srcs = [":hello_world_linux_amd64"],
+)
+
+oci_image(
+    name = "image_amd64",
+    architecture = "amd64",
+    entrypoint = ["/hello_world_linux_amd64"],
+    os = "linux",
+    tars = [":pkg"],
+)
+
+oci_load(
+    name = "image_amd64_load",
+    image = ":image_amd64",
+    repo_tags = ["hello_world:latest"],
 )
