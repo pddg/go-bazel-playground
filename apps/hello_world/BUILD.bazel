@@ -36,5 +36,10 @@ go_library(
     deps = [
         "//internal/reverse",
         "@com_github_google_uuid//:uuid",
-    ],
+    ] + select({
+        "@rules_go//go/platform:windows": [
+            "//internal/windows",
+        ],
+        "//conditions:default": [],
+    }),
 )
