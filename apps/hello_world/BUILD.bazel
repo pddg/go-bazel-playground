@@ -1,4 +1,4 @@
-load("@rules_go//go:def.bzl", "go_binary", "go_library")
+load("@rules_go//go:def.bzl", "go_binary", "go_cross_binary", "go_library")
 
 go_binary(
     name = "hello_world",
@@ -6,9 +6,31 @@ go_binary(
     visibility = ["//visibility:public"],
 )
 
+[
+    go_cross_binary(
+        name = "hello_world_" + os + "_" + arch,
+        platform = "@rules_go//go/toolchain:" + os + "_" + arch,
+        target = ":hello_world",
+    )
+    for os in [
+        "linux",
+        "windows",
+        "darwin",
+    ]
+    for arch in [
+        "amd64",
+        "arm64",
+    ]
+]
+
 go_library(
     name = "hello_world_lib",
-    srcs = ["main.go"],
+    srcs = [
+        "main.go",
+        "os_darwin.go",
+        "os_linux.go",
+        "os_windows.go",
+    ],
     importpath = "github.com/pddg/go-bazel-playground/apps/hello_world",
     visibility = ["//visibility:private"],
     deps = [
