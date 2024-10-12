@@ -14,6 +14,9 @@ bazel_dep(name = "rules_oci", version = "2.0.0")
 bazel_dep(name = "rules_pkg", version = "1.0.1")
 ```
 
+rules_ociはdockerコマンドを使わないため、イメージをビルドするホストにDockerは必要無い。
+ただし、実際に作成したイメージをコンテナとして動作させてチェックするために便利であるため、本書ではdockerコマンドを用いる箇所がある。
+
 ## Build container image from scratch
 
 これを使って、イメージをビルドする。`apps/hello_world/BUILD.bazel`に記述する。
