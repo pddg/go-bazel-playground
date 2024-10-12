@@ -5,7 +5,7 @@
 
 ## Setup rules_oci
 
-bazelではコンテナイメージの作成もルールという形で抽象化されている。以前は[rules_docker](https://github.com/bazelbuild/rules_docker)が使われていましたが、これは既にアーカイブされています。現在は[rules_oci](https://github.com/bazel-contrib/rules_oci)を使うのがスタンダードになっています。
+bazelではコンテナイメージの作成もルールという形で抽象化されている。以前は[rules_docker](https://github.com/bazelbuild/rules_docker)が使われていたが、これは既にアーカイブされている。現在は[rules_oci](https://github.com/bazel-contrib/rules_oci)を使うのがスタンダードになっている。
 
 まず`MODULE.bazel`にrules_ociのセットアップを追記する。また、ファイルなどをtarで固めてイメージに追加するために[rules_pkg](https://github.com/bazelbuild/rules_pkg)が必要なのでこれも追記する。
 
@@ -184,5 +184,7 @@ index e0ae79e..7a4f968 100644
      platforms = [
          "linux/amd64",
 ```
+
+## Build multi architecture image
 
 
