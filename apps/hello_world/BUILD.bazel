@@ -1,6 +1,11 @@
 load("@rules_go//go:def.bzl", "go_binary", "go_cross_binary", "go_library")
-load("@rules_oci//oci:defs.bzl", "oci_image", "oci_load")
+load("@rules_oci//oci:defs.bzl", "oci_image", "oci_image_index", "oci_load")
 load("@rules_pkg//:pkg.bzl", "pkg_tar")
+
+ARCHS = [
+    "amd64",
+    "arm64",
+]
 
 go_binary(
     name = "hello_world",
@@ -19,10 +24,7 @@ go_binary(
         "windows",
         "darwin",
     ]
-    for arch in [
-        "amd64",
-        "arm64",
-    ]
+    for arch in ARCHS
 ]
 
 go_library(
@@ -46,20 +48,35 @@ go_library(
     }),
 )
 
-pkg_tar(
-    name = "pkg",
-    srcs = [":hello_world_linux_amd64"],
-)
+[
+    pkg_tar(
+        name = "pkg_" + arch,
+        srcs = [":hello_world_linux_" + arch],
+    )
+    for arch in ARCHS
+]
 
-oci_image(
-    name = "image_amd64",
-    base = "@distroless_static_debian12_linux_amd64",
-    entrypoint = ["/hello_world_linux_amd64"],
-    tars = [":pkg"],
+[
+    oci_image(
+        name = "image_" + arch,
+        # Specifying variant 'v8' is needed for arm64
+        base = "@distroless_static_debian12_linux_" + arch + ("_v8" if arch == "arm64" else ""),
+        entrypoint = ["/hello_world_linux_" + arch],
+        tars = [":pkg_" + arch],
+    )
+    for arch in ARCHS
+]
+
+oci_image_index(
+    name = "image",
+    images = [":image_" + arch for arch in ARCHS],
 )
 
 oci_load(
-    name = "image_amd64_load",
-    image = ":image_amd64",
+    name = "image_load",
+    image = select({
+        "@platforms//cpu:x86_64": ":image_amd64",
+        "@platforms//cpu:arm64": ":image_arm64",
+    }),
     repo_tags = ["hello_world:latest"],
 )

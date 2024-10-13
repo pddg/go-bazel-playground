@@ -109,11 +109,11 @@ oci.pull(
     image = "gcr.io/distroless/static-debian12",
     platforms = [
         "linux/amd64",
-        "linux/arm64",
+        "linux/arm64/v8",
     ],
     tag = "nonroot",
 )
-use_repo(oci, "distroless_static_debian12", "distroless_static_debian12_linux_amd64", "distroless_static_debian12_linux_arm64")
+use_repo(oci, "distroless_static_debian12", "distroless_static_debian12_linux_amd64", "distroless_static_debian12_linux_arm64_v8")
 ```
 
 実際には `use_repo(...` は記述せずに `bazel mod tidy` とすれば自動で生成される。ではこれをベースにhello_worldイメージを変更する。
@@ -190,4 +190,58 @@ index e0ae79e..7a4f968 100644
 
 ## Build multi architecture image
 
+ここまでは単一のアーキテクチャ向けにイメージをビルドしてきたが、現代ではApple Siliconなど主に開発環境を中心としてARMアーキテクチャの採用が広がっている。
+サーバ環境でもAWS Gravitonプロセッサ、Azure Cobaltプロセッサ、Google Axionプロセッサ、Oracle CloudやAzureで提供されているAmpere Altraなど選択肢が増えつつある。
+amd64はまだまだ豊富とはいえ、こういったARMプロセッサの環境で動作させたいという需要は増えている。これらを同時にターゲットにするため、マルチアーキテクチャイメージを生成するのが現代では一般的と言える。
+
+rules_ociはこういったマルチアーキテクチャビルドの抽象化も提供している。これは `oci_image_index` という名前で提供されている。
+
+```python:apps/hello_world/BUILD.bazel
+load("@rules_go//go:def.bzl", "go_binary", "go_cross_binary", "go_library")
+load("@rules_oci//oci:defs.bzl", "oci_image", "oci_image_index", "oci_load")
+load("@rules_pkg//:pkg.bzl", "pkg_tar")
+
+ARCHS = [
+    "amd64",
+    "arm64",
+]
+
+# 中略
+
+[
+    pkg_tar(
+        name = "pkg_" + arch,
+        srcs = [":hello_world_linux_" + arch],
+    )
+    for arch in ARCHS
+]
+
+[
+    oci_image(
+        name = "image_" + arch,
+        # Specifying variant 'v8' is needed for arm64
+        base = "@distroless_static_debian12_linux_" + arch + ("_v8" if arch == "arm64" else ""),
+        entrypoint = ["/hello_world_linux_" + arch],
+        tars = [":pkg_" + arch],
+    )
+    for arch in ARCHS
+]
+
+oci_image_index(
+    name = "index",
+    images = [":image_" + arch for arch in ARCHS],
+)
+
+oci_load(
+    name = "image_load",
+    image = select({
+      "@platforms//cpu:x86_64": ":image_amd64",
+      "@platforms//cpu:arm64": ":image_arm64",
+    }),
+    repo_tags = ["hello_world:latest"],
+)
+```
+
+単純に複数アーキテクチャ向けにイメージをビルドし、 `oci_image_index` でそれをまとめている。
+`oci_load` で `select` を使って指定されたCPUアーキテクチャ次第で読み込まれるイメージを切り替えているが、amd64・arm64どちらのホストでも `image_load` すればこれで動くかなと思っただけなので、単純に `image_amd64_load` とかを作ってもよい。
 
