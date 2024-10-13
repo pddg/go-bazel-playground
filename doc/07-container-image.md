@@ -245,3 +245,138 @@ oci_load(
 単純に複数アーキテクチャ向けにイメージをビルドし、 `oci_image_index` でそれをまとめている。
 `oci_load` で `select` を使って指定されたCPUアーキテクチャ次第で読み込まれるイメージを切り替えているが、amd64・arm64どちらのホストでも `image_load` すればこれで動くかなと思っただけなので、単純に `image_amd64_load` とかを作ってもよい。
 
+### Use transition
+
+bazelの[transition](https://bazel.build/extending/config#user-defined-transitions)という機能を使うことで、既存のターゲットに対して設定値の提供などを行うルールを記述できる。
+これにより、バイナリのビルドからイメージのビルドまでplatformの一貫した選択などを行えるようになり、がんばってループを書かなくてもよくなる。
+
+rules_ociのexampleにその一例がある。ここでは `multi_arch` という新しいルールを作っており、指定した `platform` に対して `oci_image` をビルドするようにしている。
+https://github.com/bazel-contrib/rules_oci/tree/v2.0.0/examples/multi_architecture_image
+
+このルールを拝借して、コンテナイメージ以外にも使えるよう名前だけ調整して追加してみる。
+
+```sh
+mkdir -p build_tools/transitions
+touch build_tools/transitions/BUILD.bazel
+```
+
+```python:build_tools/transitions/multi_arch.bzl
+# original: https://github.com/bazel-contrib/rules_oci/blob/v2.0.0/examples/multi_architecture_image/transition.bzl
+
+def _multiarch_transition(settings, attr):
+    return [
+        # 指定されたplatformsをビルド時のコマンドラインオプションとして指定
+        {"//command_line_option:platforms": str(platform)}
+        for platform in attr.platforms
+    ]
+
+multiarch_transition = transition(
+    implementation = _multiarch_transition,
+    inputs = [],
+    outputs = ["//command_line_option:platforms"],
+)
+
+def _impl(ctx):
+    return DefaultInfo(files = depset(ctx.files.target))
+
+multi_arch = rule(
+    implementation = _impl,
+    attrs = {
+        "target": attr.label(cfg = multiarch_transition),
+        "platforms": attr.label_list(),
+        # このルールを使えるパッケージの許可リストを設定できる。
+        # ここでは全て許可するようになっている。
+        # transitionの追加はビルドの依存グラフを簡単に大きくしてしまえるため、
+        # こういった保護機構があるらしい。
+        # https://bazel.build/versions/7.0.0/extending/config#user-defined-transitions
+        "_allowlist_function_transition": attr.label(
+            default = "@bazel_tools//tools/allowlists/function_transition_allowlist",
+        ),
+    },
+)
+```
+
+これを使うと先ほどの例は以下の様に記述出来るようになる。
+
+```python:apps/hello_world/BUILD.bazel
+load("@rules_go//go:def.bzl", "go_binary", "go_cross_binary", "go_library")
+load("@rules_oci//oci:defs.bzl", "oci_image", "oci_image_index", "oci_load")
+load("@rules_pkg//:pkg.bzl", "pkg_tar")
+load("//build_tools/transitions:multi_arch.bzl", "multi_arch")
+
+go_binary(
+    name = "hello_world",
+    # 省略
+)
+
+pkg_tar(
+    name = "pkg",
+    srcs = [":hello_world"],
+)
+
+oci_image(
+    name = "image",
+    base = "@distroless_static_debian12",
+    entrypoint = ["/hello_world"],
+    tars = [":pkg"],
+)
+
+multi_arch(
+    name = "images",
+    target = ":image",
+    platforms = [
+        "@rules_go//go/toolchain:linux_amd64",
+        "@rules_go//go/toolchain:linux_arm64",
+    ],
+)
+
+oci_image_index(
+    name = "image_index",
+    images = [":images"],
+)
+```
+
+なんだか便利そうなので公式で入ったら良いのにと思うかも知れないが、rules_ociのメンテナはかなり慎重に考えているようだ。
+（その割には公式のexampleとして特に注意書きもなしに載せるんだとは思った）
+https://github.com/bazel-contrib/rules_oci/issues/228
+
+前身である `rules_docker` でこのようなtransitionを提供したところ、Apple Siliconの普及に伴いamd64とarm64の違いによるビルドの失敗などがサポートコストを増やしたようだ。
+
+transitionを使うことで記述は簡潔になるが、問題は残されている。`:image` を直接指定してビルドすると実行ホストのOS・アーキテクチャでビルドされたバイナリが使われるため、例えばamd64のmacOSでビルドするとdarwin_amd64向けにコンパイルされたバイナリがLinux向けイメージに追加される。
+
+`oci_load` を使ってホストに作成したイメージを読み込ませたい場合、このようにビルドされたコンテナイメージを読み込んでしまうと、実行時に `exec format error` で失敗するようになる。このような意図しない結果を避けるため、ユーザは意識して `--platforms` オプションを使う必要がある。
+
+`oci_load` 時のplatformを意識させないためには、ホストのアーキテクチャと一致し、ただし `GOOS` だけは `linux` になるようにビルドしてイメージを構築しなければならない。
+`multi_arch` ルールでplatformの指定をまとめず、以下の様にそれぞれ宣言して利用した方が便利かもしれない。
+
+```python:apps/hello_world/BUILD.bazel
+ARCHS = [
+    "amd64",
+    "arm64",
+]
+
+[
+    multi_arch(
+        name = "image_" + arch,
+        target = ":image",
+        platforms = [
+            "@rules_go//go/toolchain:linux_" + arch,
+        ],
+    )
+    for arch in ARCHS
+]
+
+oci_image_index(
+    name = "image_index",
+    images = [":image_" + arch for arch in ARCHS],
+)
+
+oci_load(
+    name = "image_load",
+    image = select({
+      "@platforms//cpu:x86_64": ":image_amd64",
+      "@platforms//cpu:arm64": ":image_arm64",
+    }),
+    repo_tags = ["hello_world:latest"],
+)
+```
