@@ -1,7 +1,5 @@
 load("@rules_go//go:def.bzl", "go_binary", "go_library")
-load("@rules_oci//oci:defs.bzl", "oci_image", "oci_image_index", "oci_load")
-load("@rules_pkg//:pkg.bzl", "pkg_tar")
-load("//build_tools/transitions:multi_arch.bzl", "multi_arch")
+load("//build_tools/macros:oci.bzl", "go_oci_image")
 
 go_binary(
     name = "hello_world",
@@ -30,44 +28,10 @@ go_library(
     }),
 )
 
-pkg_tar(
-    name = "pkg",
-    srcs = [":hello_world"],
-)
-
-oci_image(
+go_oci_image(
     name = "image",
+    srcs = [":hello_world"],
     base = "@distroless_static_debian12",
     entrypoint = ["/hello_world"],
-    tars = [":pkg"],
-)
-
-ARCHS = [
-    "amd64",
-    "arm64",
-]
-
-[
-    multi_arch(
-        name = "image_" + arch,
-        platforms = [
-            "@rules_go//go/toolchain:linux_" + arch,
-        ],
-        target = ":image",
-    )
-    for arch in ARCHS
-]
-
-oci_image_index(
-    name = "image_index",
-    images = [":image_" + arch for arch in ARCHS],
-)
-
-oci_load(
-    name = "image_load",
-    image = select({
-        "@platforms//cpu:x86_64": ":image_amd64",
-        "@platforms//cpu:arm64": ":image_arm64",
-    }),
     repo_tags = ["hello_world:latest"],
 )

@@ -380,3 +380,91 @@ oci_load(
     repo_tags = ["hello_world:latest"],
 )
 ```
+
+### Tips: Use macro
+
+[macro](https://bazel.build/extending/macros)とは、典型的な操作をまとめてカプセル化して隠蔽したり、再利用可能なコードを作成するための機能である。
+コンテナイメージを必要とする全てのアプリケーションで先ほどの記述を繰り返すのは面倒なので、macroを使ってまとめてみる。
+
+```sh
+mkdir -p build_tools/macros
+touch build_tools/macros/BUILD.bazel
+```
+
+```python:build_tools/macros/oci.bzl
+"""OCI image macros."""
+
+load("@rules_oci//oci:defs.bzl", "oci_image", "oci_image_index", "oci_load")
+load("@rules_pkg//:pkg.bzl", "pkg_tar")
+load("//build_tools/transitions:multi_arch.bzl", "multi_arch")
+
+ARCHS = [
+    "amd64",
+    "arm64",
+]
+
+def go_oci_image(name, base, entrypoint, srcs, architectures = ARCHS):
+    """go_oci_image creates a multi-arch container image from Go binary.
+
+    Args:
+        name: The name of this targes.
+        base: The base image to use.
+        entrypoint: The entrypoint for the container.
+        srcs: Go binaries to include the image.
+        repo_tags: The repository tags to apply to the image when load it into host.
+        architectures: The architectures to build for (default: ARCHS).
+    """
+    pkg_tar(
+        name = name + "_pkg",
+        srcs = srcs,
+    )
+
+    oci_image(
+        name = name,
+        base = base,
+        entrypoint = entrypoint,
+        tars = [":" + name + "_pkg"],
+    )
+
+    for arch in architectures:
+        multi_arch(
+            name = name + "_" + arch,
+            target = ":" + name,
+            platforms = [
+                "@rules_go//go/toolchain:linux_" + arch,
+            ],
+        )
+
+    oci_image_index(
+        name = name + "_index",
+        images = [":" + name + "_" + arch for arch in architectures],
+    )
+
+    oci_load(
+        name = name + "_load",
+        image = select({
+          "@platforms//cpu:x86_64": ":" + name + "_amd64",
+          "@platforms//cpu:arm64": ":" + name + "_arm64",
+        }),
+        repo_tags = repo_tags,
+    )
+```
+
+これを使うと以下の様に記述できる。
+
+```python:apps/hello_world/BUILD.bazel
+load("//build_tools/macros:oci.bzl", "go_oci_image")
+
+# 中略
+
+go_oci_image(
+    name = "image",
+    srcs = [":hello_world"],
+    base = "@distroless_static_debian12",
+    entrypoint = ["/hello_world"],
+    repo_tags = ["hello_world:latest"],
+)
+```
+
+このmacroを使うだけで、複数アーキテクチャ向けのイメージをビルドするターゲットや、それをOCI Image Indexにまとめるターゲット、ホストのアーキテクチャに一致するイメージをロードするターゲットが自動で生成される。
+ただ設定を後から注入することがほとんどできないので、実際に利用するならもう少し調整の必要があるだろう。
