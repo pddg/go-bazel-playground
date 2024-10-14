@@ -575,3 +575,152 @@ gh auth refresh --scopes read:packages,write:packages
 # credential helperを使ってプッシュする
 bazel run //apps/hello_world:image_push
 ```
+
+## Tips: Install deb package
+
+distrolessコンテナイメージを使っている場合、コンテナ内には必要最低限のファイルしか含まれていないため、アプリケーションの実行に必要なファイルが足りない場合がある。
+aptなどを使ってパッケージをインストールしたくても、distrolessコンテナイメージにはパッケージマネージャが含まれておらず、bazelはDockerfileのようにコンテナ内でのコマンド実行をサポートしていない。
+
+これを簡単にするため、[rules_distroless](https://github.com/GoogleContainerTools/rules_distroless)が提供されている。
+まずは `MODULE.bazel` にrules_distrolessのセットアップを追記する。
+
+```python:MODULE.bazel
+bazel_dep(name = "rules_distroless", version = "0.3.8")
+
+apt = use_extension("@rules_distroless//apt:extensions.bzl", "apt")
+apt.install(
+    name = "bookworm",
+    manifest = "//build_tools/apt:bookworm.yaml",
+    lock = "//build_tools/apt:bookworm.lock.json",
+)
+use_repo(apt, "bookworm")
+```
+
+`build_tools/apt` ディレクトリを作成し、そこに `bookworm.yaml` と `BUILD.bazel` を配置する。
+
+```sh
+mkdir -p build_tools/apt
+touch build_tools/apt/BUILD.bazel
+touch build_tools/apt/bookworm.yaml
+# 初期化
+echo '{"version":1,"packages":[]}' > build_tools/apt/bookworm.lock.json
+```
+
+`bookworm.yaml` に参照するリポジトリやパッケージを記述する。
+
+```yaml:build_tools/apt/bookworm.yaml
+version: 1
+sources:
+  - channel: bookworm main contrib
+    url: https://snapshot.debian.org/archive/debian/20241013T203126Z/
+  - channel: bookworm-security main
+    url: https://snapshot.debian.org/archive/debian-security/20241013T181826Z/
+  - channel: bookworm-updates main
+    url: https://snapshot.debian.org/archive/debian/20241013T203126Z/
+
+archs:
+  - amd64
+  - arm64
+
+packages:
+  - cowsay
+  - fortunes
+```
+
+ロックファイルを生成する。これによりその実行時点でsnapshotリポジトリから得られた依存関係を解析しバージョンを固定する。
+
+```sh
+bazel run @bookworm//:lock
+```
+
+fortuneとcowsayをインストールするしただけのdistrolessイメージを作る。
+
+```sh
+mkdir -p apps/fortune_cowsay
+```
+
+```python:apps/fortune_cowsay/BUILD.bazel
+load("@rules_oci//oci:defs.bzl", "oci_image", "oci_image_index", "oci_load", "oci_push")
+load("@rules_distroleless//apt:defs.bzl", "dpkg_status")
+load("//build_tools/transitions:multi_arch.bzl", "multi_arch")
+
+PACKAGES = [
+    "@bookworm//cowsay",
+    "@bookworm//fortunes",
+]
+
+oci_image(
+    name = "image",
+    base = "@distroless_static_debian12",
+    entrypoint = ["/usr/games/cowsay"],
+    tars = select({
+        "@platforms//cpu:x86_64": [
+            pkg + "_amd64" for pkg in PACKAGES
+        ],
+        "@platforms//cpu:arm64": [
+            pkg + "_arm64" for pkg in PACKAGES
+        ],
+    }),
+    annotations = {
+        "org.opencontainers.image.source": "https://github.com/pddg/go-bazel-playground",
+    },
+)
+
+ARCHS = [
+    "amd64",
+    "arm64",
+]
+
+[
+    multi_arch(
+        name = "image_" + arch,
+        target = ":image",
+        platforms = [
+            "@rules_go//go/toolchain:linux_" + arch,
+        ],
+    )
+    for arch in ARCHS
+]
+
+oci_image_index(
+    name = "image_index",
+    images = [":image_" + arch for arch in ARCHS],
+)
+
+REPOSITORY = "ghcr.io/pddg/go-bazel-playground-fortune-cowsay"
+
+oci_load(
+    name = "image_load",
+    image = select({
+      "@platforms//cpu:x86_64": ":image_amd64",
+      "@platforms//cpu:arm64": ":image_arm64",
+    }),
+    repo_tags = [REPOSITORY + ":latest"],
+)
+
+oci_push(
+    name = "image_push",
+    image = ":image_index",
+    repository = REPOSITORY,
+    remote_tags = ["latest"],
+)
+```
+
+これでfortuneやcowsayが動くdistrolessコンテナイメージが作成できる。
+
+```sh
+bazel run //apps/fortune_cowsay:image_load
+docker run --rm ghcr.io/pddg/go-bazel-playground-fortune-cowsay:latest hello
+```
+
+```
+❯ docker run --rm ghcr.io/pddg/go-bazel-playground-fortune-cowsay:latest hello
+ _______
+< hello >
+ -------
+        \   ^__^
+         \  (oo)\_______
+            (__)\       )\/\
+                ||----w |
+                ||     ||
+```

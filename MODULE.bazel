@@ -39,3 +39,13 @@ oci.pull(
     tag = "nonroot",
 )
 use_repo(oci, "distroless_static_debian12", "distroless_static_debian12_linux_amd64", "distroless_static_debian12_linux_arm64_v8")
+
+bazel_dep(name = "rules_distroless", version = "0.3.8")
+
+apt = use_extension("@rules_distroless//apt:extensions.bzl", "apt")
+apt.install(
+    name = "bookworm",
+    manifest = "//build_tools/apt:bookworm.yaml",
+    lock = "//build_tools/apt:bookworm.lock.json",
+)
+use_repo(apt, "bookworm")

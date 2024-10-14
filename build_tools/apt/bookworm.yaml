@@ -1,0 +1,16 @@
+version: 1
+sources:
+  - channel: bookworm main contrib
+    url: https://snapshot.debian.org/archive/debian/20241013T203126Z/
+  - channel: bookworm-security main
+    url: https://snapshot.debian.org/archive/debian-security/20241013T181826Z/
+  - channel: bookworm-updates main
+    url: https://snapshot.debian.org/archive/debian/20241013T203126Z/
+
+archs:
+  - amd64
+  - arm64
+
+packages:
+  - cowsay
+  - fortunes

@@ -1,0 +1,65 @@
+load("@rules_oci//oci:defs.bzl", "oci_image", "oci_image_index", "oci_load", "oci_push")
+load("//build_tools/transitions:multi_arch.bzl", "multi_arch")
+
+PACKAGES = [
+    "@bookworm//cowsay",
+    "@bookworm//fortunes",
+]
+
+oci_image(
+    name = "image",
+    annotations = {
+        "org.opencontainers.image.source": "https://github.com/pddg/go-bazel-playground",
+    },
+    base = "@distroless_static_debian12",
+    entrypoint = ["/usr/games/cowsay"],
+    tars = select({
+        "@platforms//cpu:x86_64": [
+            pkg + "/amd64"
+            for pkg in PACKAGES
+        ],
+        "@platforms//cpu:arm64": [
+            pkg + "/arm64"
+            for pkg in PACKAGES
+        ],
+    }),
+)
+
+ARCHS = [
+    "amd64",
+    "arm64",
+]
+
+[
+    multi_arch(
+        name = "image_" + arch,
+        platforms = [
+            "@rules_go//go/toolchain:linux_" + arch,
+        ],
+        target = ":image",
+    )
+    for arch in ARCHS
+]
+
+oci_image_index(
+    name = "image_index",
+    images = [":image_" + arch for arch in ARCHS],
+)
+
+REPOSITORY = "ghcr.io/pddg/go-bazel-playground-fortune-cowsay"
+
+oci_load(
+    name = "image_load",
+    image = select({
+        "@platforms//cpu:x86_64": ":image_amd64",
+        "@platforms//cpu:arm64": ":image_arm64",
+    }),
+    repo_tags = [REPOSITORY + ":latest"],
+)
+
+oci_push(
+    name = "image_push",
+    image = ":image_index",
+    remote_tags = ["latest"],
+    repository = REPOSITORY,
+)
