@@ -1,6 +1,6 @@
 """OCI image macros."""
 
-load("@rules_oci//oci:defs.bzl", "oci_image", "oci_image_index", "oci_load")
+load("@rules_oci//oci:defs.bzl", "oci_image", "oci_image_index", "oci_load", "oci_push")
 load("@rules_pkg//:pkg.bzl", "pkg_tar")
 load("//build_tools/transitions:multi_arch.bzl", "multi_arch")
 
@@ -9,7 +9,7 @@ ARCHS = [
     "arm64",
 ]
 
-def go_oci_image(name, base, entrypoint, srcs, repo_tags, architectures = ARCHS):
+def go_oci_image(name, base, entrypoint, srcs, repository, architectures = ARCHS, annotations = {}):
     """go_oci_image creates a multi-arch container image from Go binary.
 
     Args:
@@ -17,8 +17,9 @@ def go_oci_image(name, base, entrypoint, srcs, repo_tags, architectures = ARCHS)
         base: The base image to use.
         entrypoint: The entrypoint for the container.
         srcs: Go binaries to include the image.
-        repo_tags: The repository tags to apply to the image when load it into host.
+        repository: The repository to push the image to.
         architectures: The architectures to build for (default: ARCHS).
+        annotations: The annotations to add to the image.
     """
     pkg_tar(
         name = name + "_pkg",
@@ -30,6 +31,7 @@ def go_oci_image(name, base, entrypoint, srcs, repo_tags, architectures = ARCHS)
         base = base,
         entrypoint = entrypoint,
         tars = [":" + name + "_pkg"],
+        annotations = annotations,
     )
 
     for arch in architectures:
@@ -52,5 +54,12 @@ def go_oci_image(name, base, entrypoint, srcs, repo_tags, architectures = ARCHS)
           "@platforms//cpu:x86_64": ":" + name + "_amd64",
           "@platforms//cpu:arm64": ":" + name + "_arm64",
         }),
-        repo_tags = repo_tags,
+        repo_tags = [repository + ":latest"],
+    )
+
+    oci_push(
+        name = name + "_push",
+        image = ":" + name + "_index",
+        repository = repository,
+        remote_tags = ["latest"],
     )

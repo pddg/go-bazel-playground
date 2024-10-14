@@ -468,3 +468,78 @@ go_oci_image(
 
 このmacroを使うだけで、複数アーキテクチャ向けのイメージをビルドするターゲットや、それをOCI Image Indexにまとめるターゲット、ホストのアーキテクチャに一致するイメージをロードするターゲットが自動で生成される。
 ただ設定を後から注入することがほとんどできないので、実際に利用するならもう少し調整の必要があるだろう。
+
+## Push to registry
+
+作成したコンテナイメージを本番環境にデプロイするため、また他の開発者へ共有するためにコンテナイメージをレジストリにプッシュする必要がある。
+
+rules_ociはレジストリへのpushを `oci_push` ルールとして実装している。go_oci_image macroへ以下の様に追記する。
+
+```python:buidl_tools/macros/oci.bzl
+load("@rules_oci//oci:defs.bzl", "oci_image", "oci_image_index", "oci_load", "oci_push")
+load("@rules_pkg//:pkg.bzl", "pkg_tar")
+load("//build_tools/transitions:multi_arch.bzl", "multi_arch")
+
+def go_oci_image(name, base, entrypoint, srcs, repository, architectures = ARCHS):
+    # 中略
+
+    oci_push(
+        name = name + "_push",
+        image = ":" + name + "_index",
+        repogitory = repository,
+        remote_tags = ["latest"],
+    )
+```
+
+引数が増えたので、これを使う側も修正する。
+
+```diff:apps/hello_world/BUILD.bazel
+diff --git a/apps/hello_world/BUILD.bazel b/apps/hello_world/BUILD.bazel
+index ff89e96..415d187 100644
+--- a/apps/hello_world/BUILD.bazel
++++ b/apps/hello_world/BUILD.bazel
+@@ -33,5 +33,5 @@ go_oci_image(
+     srcs = [":hello_world"],
+     base = "@distroless_static_debian12",
+     entrypoint = ["/hello_world"],
+-    repo_tags = ["hello_world:latest"],
++    repository = "ghcr.io/pddg/go-bazel-playground-hello-world",
+ )
+```
+
+`bazel run //apps/hello_world:image_push` でプッシュできる。ただし、リモートレジストリにpushするためにはクレデンシャルが必要である。デフォルトではrules_ociはホストの環境にあるDockerやPodmanのログイン設定を利用する。  
+https://github.com/bazel-contrib/rules_oci/blob/859b8ffd808026bd3d0c645d28bf05b366439be8/docs/pull.md#configuration
+
+```sh
+docker login ghcr.io
+bazel run //apps/hello_world:image_push
+```
+
+これでpushされたイメージはGitHub Container Registryに保存される。  
+https://github.com/pddg/go-bazel-playground/pkgs/container/go-bazel-playground-hello-world
+
+他のマシンからもpullして実行できるようになっているはずだ。
+
+```
+~$ docker run --rm ghcr.io/pddg/go-bazel-playground-hello-world:latest
+Unable to find image 'ghcr.io/pddg/go-bazel-playground-hello-world:latest' locally
+latest: Pulling from pddg/go-bazel-playground-hello-world
+c6b97f964990: Pull complete
+bfb59b82a9b6: Pull complete
+8ffb3c3cf71a: Pull complete
+a62778643d56: Pull complete
+7c12895b777b: Pull complete
+33e068de2649: Pull complete
+5664b15f108b: Pull complete
+0bab15eea81d: Pull complete
+4aa0ea1413d3: Pull complete
+da7816fa955e: Pull complete
+9aee425378d2: Pull complete
+5a328e2649be: Pull complete
+Digest: sha256:bbdcec76b808eec62c46dbc2a83a13f9e2c1dccd12263bde641022b686e3906a
+Status: Downloaded newer image for ghcr.io/pddg/go-bazel-playground-hello-world:latest
+Hello, World!(3260a2d7-a692-4a86-a2fd-3f546c009abb)
+Reversed: !dlroW ,olleH
+OsName: linux
+pudding@oryza:~$
+```

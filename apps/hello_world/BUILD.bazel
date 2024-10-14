@@ -31,7 +31,10 @@ go_library(
 go_oci_image(
     name = "image",
     srcs = [":hello_world"],
+    annotations = {
+        "org.opencontainers.image.source": "https://github.com/pddg/go-bazel-playground",
+    },
     base = "@distroless_static_debian12",
     entrypoint = ["/hello_world"],
-    repo_tags = ["hello_world:latest"],
+    repository = "ghcr.io/pddg/go-bazel-playground-hello-world",
 )
