@@ -543,3 +543,35 @@ Reversed: !dlroW ,olleH
 OsName: linux
 pudding@oryza:~$
 ```
+
+### Tips: Use credential helper
+
+ホスト環境にdockerを入れたくないなどの理由がある場合、それを使わずrules_ociにクレデンシャルを提供する credential helper を実装してもよい。
+
+例えばghコマンドを利用した認証情報の取得を行うcredential helperの参考実装が存在する。  
+https://gist.github.com/mislav/e154d707db230dc882d7194ec85d79f6
+
+これを利用すると、docker loginを行わずghコマンドから提供された認証情報のみでプッシュが可能になる。
+
+```sh
+mkdir build_tools/auth
+wget -O build_tools/auth/docker-credential-gh https://gist.githubusercontent.com/mislav/e154d707db230dc882d7194ec85d79f6/raw/46788c71697928b69b303373fb1a32b1a6d1eeec/docker-credential-gh
+chmod +x build_tools/auth/docker-credential-gh
+
+# .bazelrcにcredential helperの設定を追記
+cat << EOF >> .bazelrc
+# Use credential helper to push image
+common --credential_helper=ghcr.io=%workspace%/build_tools/auth/docker-credential-gh
+EOF
+
+# ~/.docker/config.json から認証情報を消しておく。
+docker logout ghcr.io
+
+# デフォルトではghはpackages:read, write権限を持たないトークンを発行する。
+# Ref: https://github.com/cli/cli/issues/5150
+# gh auth statusで確認したとき、Token scopesに 'write:packages' が含まれていない場合は以下のコマンドでトークンを更新する。
+gh auth refresh --scopes read:packages,write:packages
+
+# credential helperを使ってプッシュする
+bazel run //apps/hello_world:image_push
+```

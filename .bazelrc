@@ -1,1 +1,3 @@
 test --test_output=errors --test_verbose_timeout_warnings
+# Use credential helper to push image
+common --credential_helper=ghcr.io=%workspace%/build_tools/auth/docker-credential-gh
