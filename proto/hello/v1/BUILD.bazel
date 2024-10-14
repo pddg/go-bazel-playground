@@ -1,0 +1,36 @@
+load("@rules_go//proto:def.bzl", "go_proto_library")
+load("@rules_proto//proto:defs.bzl", "proto_library")
+
+proto_library(
+    name = "greeter_proto",
+    srcs = ["greeter.proto"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":hello_request_proto",
+        ":hello_response_proto",
+    ],
+)
+
+proto_library(
+    name = "hello_request_proto",
+    srcs = ["hello_request.proto"],
+    visibility = ["//visibility:public"],
+)
+
+proto_library(
+    name = "hello_response_proto",
+    srcs = ["hello_response.proto"],
+    visibility = ["//visibility:public"],
+)
+
+go_proto_library(
+    name = "v1_go_proto",
+    compilers = ["@rules_go//proto:go_grpc"],
+    importpath = "github.com/pddg/go-bazel-playground/proto/hello/v1",
+    protos = [
+        ":greeter_proto",
+        ":hello_request_proto",
+        ":hello_response_proto",
+    ],
+    visibility = ["//visibility:public"],
+)

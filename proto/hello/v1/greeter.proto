@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+option go_package = "github.com/pddg/go-bazel-playground/proto/hello/v1";
+
+package pddg.hello.v1;
+
+import "proto/hello/v1/hello_request.proto";
+import "proto/hello/v1/hello_response.proto";
+
+service Greeter {
+  rpc SayHello (HelloRequest) returns (HelloResponse) {}
+}

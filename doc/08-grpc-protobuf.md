@@ -1,0 +1,319 @@
+# gRPC and Protocol Buffers
+
+[gRPC](https://grpc.io/) とは、Googleが開発したRPCフレームワークで、そのシリアライゼーションフォーマットとして[Protocol Buffers](https://protobuf.dev/)がよく用いられる。
+
+Protocol Buffersはデータの構造を定義するための言語にIDL（Interface Definition Language）を用いる。このIDLをコンパイルすることで各言語向けのデータ構造を生成することができ、gRPCのスキーマの定義にも用いられる。
+
+## Setup toolchains_protoc
+
+Protocol Buffersのリポジトリを直接依存に加えると、少し変更がある度に再ビルドが発生し、これが非常に遅い。
+Bazel 7.0から実装された `--incompatible_enable_proto_toolchain_resolution` と [toolchains_protoc](https://github.com/aspect-build/toolchains_protoc)を使うことで、コンパイル済みのバイナリを使ってビルド出来るようになる。
+
+`MODULE.bazel` に以下の内容を追記する。
+
+```python:MODULE.bazel
+bazel_dep(name = "toolchains_protoc", version = "0.3.3")
+protoc = use_extension("@toolchains_protoc//protoc:extensions.bzl", "protoc")
+protoc.toolchain(
+    google_protobuf = "com_google_protobuf",
+    version = "v28.0",
+)
+use_repo(protoc, "com_google_protobuf", "toolchains_protoc_hub")
+register_toolchains("@toolchains_protoc_hub//:all")
+```
+
+`.bazelrc` に以下の内容を追記する。
+
+```sh
+common --incompatible_enable_proto_toolchain_resolution
+```
+
+## Add proto and implement gRPC server
+
+`proto` ディレクトリ以下にprotoファイルを置くこととし、以下の様なprotoファイルを作成する。
+
+```sh
+mkdir -p proto/hello/v1
+```
+
+```proto:proto/hello/v1/hello_request.proto
+syntax = "proto3";
+
+option go_package = "github.com/pddg/go-bazel-playground/proto/hello/v1";
+
+package pddg.hello.v1;
+
+message HelloRequest {
+  string name = 1;
+}
+```
+
+```proto:proto/hello/v1/hello_response.proto
+syntax = "proto3";
+
+option go_package = "github.com/pddg/go-bazel-playground/proto/hello/v1";
+
+package pddg.hello.v1;
+
+message HelloResponse {
+  string message = 1;
+}
+```
+
+```proto:proto/hello/v1/greeter.proto
+syntax = "proto3";
+
+option go_package = "github.com/pddg/go-bazel-playground/proto/hello/v1";
+
+package pddg.hello.v1;
+
+import "proto/hello/v1/hello_request.proto";
+import "proto/hello/v1/hello_response.proto";
+
+service Greeter {
+  rpc SayHello (HelloRequest) returns (HelloResponse) {}
+}
+```
+
+`go mod tidy` が実行できるよう、空のファイルを一つ置いておく。これを置かない場合、 `go mod tidy` はimportしようとしたパッケージが見つからずエラーを返す。
+
+```sh
+cat << 'EOF' > proto/hello/v1/_empty.go
+package v1
+
+# DO NOT EDIT. required for `go mod tidy`
+EOF
+```
+
+gazelleにいくつかのオプションを渡すため、 `BUILD.bazel` の `gazelle` ターゲットを以下のように修正する。
+
+```diff:BUILD.bazel
+diff --git a/BUILD.bazel b/BUILD.bazel
+index 7750e78..c0ddc0b 100644
+--- a/BUILD.bazel
++++ b/BUILD.bazel
+@@ -4,6 +4,10 @@ load("@rules_go//go:def.bzl", "TOOLS_NOGO", "go_library", "nogo")
+ # このprefixには、このリポジトリ自体のパスを指定する
+ 
+ # gazelle:prefix github.com/pddg/go-bazel-playground
++# gazelle:exclude _empty.go
++# gazelle:proto file
++# gazelle:go_grpc_compilers @rules_go//proto:go_grpc
++# gazelle:go_proto_compilers @rules_go//proto:go_proto
+ gazelle(name = "gazelle")
+ 
+ gazelle(
+```
+
+- `gazelle:exclude _empty.go`: `_empty.go` を対象とする `go_library` が生成されないよう無視させる
+- `gazelle:proto file`: 一つのprotoファイルに対して一つの `proto_library` が生成されるようにする
+- `gazelle:go_grpc_compilers @rules_go//proto:go_grpc`: 指定しない場合、後方互換性のため `@io_bazel_rules_go//` というプレフィクスで指定されてしまいエラーになる。
+- `gazelle:go_proto_compilers @rules_go//proto:go_proto`: 指定しない場合、後方互換性のため `@io_bazel_rules_go//` というプレフィクスで指定されてしまいエラーになる。
+
+gazelleによるビルドファイルの生成を行う。
+
+```sh
+bazel run //:gazelle
+```
+
+少し長いが、以下の様なBUILDファイルが生成される。
+
+```python:pddg/hello/v1/BUILD.bazel
+load("@rules_go//proto:def.bzl", "go_proto_library")
+load("@rules_proto//proto:defs.bzl", "proto_library")
+
+proto_library(
+    name = "greeter_proto",
+    srcs = ["greeter.proto"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":hello_request_proto",
+        ":hello_response_proto",
+    ],
+)
+
+proto_library(
+    name = "hello_request_proto",
+    srcs = ["hello_request.proto"],
+    visibility = ["//visibility:public"],
+)
+
+proto_library(
+    name = "hello_response_proto",
+    srcs = ["hello_response.proto"],
+    visibility = ["//visibility:public"],
+)
+
+go_proto_library(
+    name = "v1_go_proto",
+    compilers = ["@rules_go//proto:go_grpc"],
+    importpath = "github.com/pddg/go-bazel-playground/proto/hello/v1",
+    protos = [
+        ":greeter_proto",
+        ":hello_request_proto",
+        ":hello_response_proto",
+    ],
+    visibility = ["//visibility:public"],
+)
+```
+
+このスキーマを実装する。
+
+```sh
+mkdir -p apps/greeter/server
+```
+
+```go:apps/greeter/server/greeter.go
+package server
+
+import (
+	"context"
+
+	hellov1 "github.com/pddg/go-bazel-playground/proto/hello/v1"
+)
+
+// GreeterServer is the server API for Greeter service.
+type GreeterServer struct {
+	hellov1.UnimplementedGreeterServer
+}
+
+// NewGreeterServer creates a new GreeterServer.
+func NewGreeterServer() *GreeterServer {
+	return &GreeterServer{}
+}
+
+// SayHello implements GreeterServer
+func (s *GreeterServer) SayHello(ctx context.Context, in *hellov1.HelloRequest) (*hellov1.HelloResponse, error) {
+	return &hellov1.HelloResponse{
+		Message: "Hello, " + in.Name,
+	}, nil
+}
+```
+
+このサーバを実際にサーブする実装と、そのサーバを叩くクライアントを実装する。まずはサーバから。
+
+```sh
+mkdir -p apps/greeter/cmd/server
+```
+
+```go:apps/greeter/cmd/server/main.go
+package main
+
+import (
+	"context"
+	"fmt"
+	"net"
+	"os"
+	"os/signal"
+
+	"google.golang.org/grpc"
+
+	greeterserver "github.com/pddg/go-bazel-playground/apps/greeter/server"
+	hellov1 "github.com/pddg/go-bazel-playground/proto/hello/v1"
+)
+
+func main() {
+	server := grpc.NewServer()
+	hellov1.RegisterGreeterServer(server, greeterserver.NewGreeterServer())
+
+	listener, err := net.Listen("tcp", ":8080")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to listen: %v\n", err)
+	}
+
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer cancel()
+	go func() {
+    if err := server.Serve(listener); err != nil {
+      fmt.Fprintf(os.Stderr, "failed to serve: %v\n", err)
+    }
+	}()
+  <-ctx.Done()
+  server.GracefulStop()
+}
+```
+
+次にクライアントを実装する。
+
+```sh
+mkdir -p apps/greeter/cmd/client
+```
+
+```go:apps/greeter/cmd/client/main.go
+package main
+
+import (
+	"context"
+	"flag"
+	"fmt"
+	"os"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+
+	hellov1 "github.com/pddg/go-bazel-playground/proto/hello/v1"
+)
+
+func main() {
+	serverAddr := flag.String("server", "localhost:8080", "server address")
+	flag.Parse()
+
+	name := flag.Arg(0)
+
+	client, err := grpc.NewClient(
+		*serverAddr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to create client: %v\n", err)
+	}
+	res, err := hellov1.NewGreeterClient(client).SayHello(context.Background(), &hellov1.HelloRequest{
+		Name: name,
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to call SayHello: %v\n", err)
+	}
+	fmt.Println(res.Message)
+}
+```
+
+`google.golang.org/grpc` はまだgo.modに追加されていないので、`go mod tidy` を実行して依存関係を解決し、gazelleによるビルドファイルの生成を行う。
+
+```sh
+bazel run @rules_go//go -- mod tidy
+bazel run //:update-go-repos
+```
+
+gazelleによるビルドファイルの生成を行う。
+
+```sh
+bazel run //:gazelle
+```
+
+これにより、greeterサーバとクライアントのビルドファイルが生成され、ビルドできるようになる。
+
+```sh
+bazel build //apps/greeter/...
+```
+
+実際にserverとclientを起動し、通信を行う。
+
+```sh
+bazel run //apps/greeter/cmd/server
+
+# in another terminal
+bazel run //apps/greeter/cmd/client -- world
+```
+
+```
+❯ bazel run //apps/greeter/cmd/greeter-client -- world
+INFO: Analyzed target //apps/greeter/cmd/greeter-client:greeter-client (1 packages loaded, 3 targets configured).
+INFO: Found 1 target...
+Target //apps/greeter/cmd/greeter-client:greeter-client up-to-date:
+  bazel-bin/apps/greeter/cmd/greeter-client/greeter-client_/greeter-client
+INFO: Elapsed time: 0.435s, Critical Path: 0.27s
+INFO: 10 processes: 4 internal, 6 darwin-sandbox.
+INFO: Build completed successfully, 10 total actions
+INFO: Running command line: bazel-bin/apps/greeter/cmd/greeter-client/greeter-client_/greeter-client user
+Hello, world
+```

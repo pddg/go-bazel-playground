@@ -4,6 +4,10 @@ load("@rules_go//go:def.bzl", "TOOLS_NOGO", "go_library", "nogo")
 # このprefixには、このリポジトリ自体のパスを指定する
 
 # gazelle:prefix github.com/pddg/go-bazel-playground
+# gazelle:exclude _empty.go
+# gazelle:proto file
+# gazelle:go_grpc_compilers @rules_go//proto:go_grpc
+# gazelle:go_proto_compilers @rules_go//proto:go_proto
 gazelle(name = "gazelle")
 
 gazelle(

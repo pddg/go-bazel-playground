@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+option go_package = "github.com/pddg/go-bazel-playground/proto/hello/v1";
+
+package pddg.hello.v1;
+
+message HelloRequest {
+  string name = 1;
+}
