@@ -9,7 +9,7 @@ ARCHS = [
     "arm64",
 ]
 
-def go_oci_image(name, base, entrypoint, srcs, repository, architectures = ARCHS, annotations = {}):
+def go_oci_image(name, base, entrypoint, srcs, repository, architectures = ARCHS, annotations = {}, remote_tags = ["latest"]):
     """go_oci_image creates a multi-arch container image from Go binary.
 
     Args:
@@ -20,6 +20,7 @@ def go_oci_image(name, base, entrypoint, srcs, repository, architectures = ARCHS
         repository: The repository to push the image to.
         architectures: The architectures to build for (default: ARCHS).
         annotations: The annotations to add to the image.
+        remote_tags: The tags to push the image to (default: ["latest"]).
     """
     pkg_tar(
         name = name + "_pkg",
@@ -61,5 +62,5 @@ def go_oci_image(name, base, entrypoint, srcs, repository, architectures = ARCHS
         name = name + "_push",
         image = ":" + name + "_index",
         repository = repository,
-        remote_tags = ["latest"],
+        remote_tags = remote_tags,
     )
