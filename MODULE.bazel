@@ -50,6 +50,4 @@ apt.install(
 )
 use_repo(apt, "bookworm")
 
-bazel_dep(name = "toolchains_protoc", version = "0.3.3")
-
 bazel_dep(name = "protobuf", version = "28.2")
