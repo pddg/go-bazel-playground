@@ -1,5 +1,5 @@
-load("@rules_oci//oci:defs.bzl", "oci_image_index", "oci_load", "oci_image", "oci_push")
 load("@aspect_bazel_lib//lib:expand_template.bzl", "expand_template")
+load("@rules_oci//oci:defs.bzl", "oci_image", "oci_image_index", "oci_load", "oci_push")
 load("//build_tools/transitions:multi_arch.bzl", "multi_arch")
 
 PACKAGES = [
@@ -10,17 +10,17 @@ PACKAGES = [
 expand_template(
     name = "image_annotations",
     out = "_stamped.annotations.txt",
+    stamp_substitutions = {
+        "devel": "{{GIT_SHA}}",
+        "nightly": "{{VERSION}}",
+        "1970-01-01T00:00:00Z": "{{BUILD_TIMESTAMP_ISO8601}}",
+    },
     template = [
         "org.opencontainers.image.source=https://github.com/pddg/go-bazel-playground",
         "org.opencontainers.image.version=nightly",
         "org.opencontainers.image.revision=devel",
         "org.opencontainers.image.created=1970-01-01T00:00:00Z",
     ],
-    stamp_substitutions = {
-        "devel": "{{GIT_SHA}}",
-        "nightly": "{{VERSION}}",
-        "1970-01-01T00:00:00Z": "{{BUILD_TIMESTAMP_ISO8601}}",
-    },
 )
 
 oci_image(
@@ -75,10 +75,10 @@ oci_load(
 expand_template(
     name = "image_tags",
     out = "_stamped.tags.txt",
-    template = ["latest"],
     stamp_substitutions = {
         "latest": "{{VERSION}}",
     },
+    template = ["latest"],
 )
 
 oci_push(
