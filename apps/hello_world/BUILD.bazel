@@ -1,8 +1,6 @@
 load("@rules_go//go:def.bzl", "go_binary", "go_library")
 load("//build_tools/macros:oci.bzl", "go_oci_image")
 
-VERSION = "1.0.0"
-
 go_binary(
     name = "hello_world",
     embed = [":hello_world_lib"],
@@ -36,11 +34,7 @@ go_library(
 go_oci_image(
     name = "image",
     srcs = [":hello_world"],
-    annotations = {
-        "org.opencontainers.image.source": "https://github.com/pddg/go-bazel-playground",
-    },
     base = "@distroless_static_debian12",
     entrypoint = ["/hello_world"],
     repository = "ghcr.io/pddg/go-bazel-playground-hello-world",
-    remote_tags = [VERSION],
 )

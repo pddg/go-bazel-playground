@@ -331,3 +331,109 @@ annotationsが正しいかを確認する。
   "org.opencontainers.image.created": "2024-10-19T11:59:12Z"
 }
 ```
+
+これを毎回行うのは面倒なのでmacroとしてまとめてしまう。
+
+```python:build_tools/macros/oci.bzl
+load("@aspect_bazel_lib//lib:expand_template.bzl", "expand_template")
+
+def oci_image_with_known_annotations(
+    name,
+    base,
+    entrypoint,
+    tars,
+    annotations = {},
+):
+    """oci_image_with_known_annotations creates a container image with known annotations.
+
+    following annotations are added by default:
+    - org.opencontainers.image.source
+    - org.opencontainers.image.version
+    - org.opencontainers.image.revision
+    - org.opencontainers.image.created
+
+    Obtain the value of these annotations from the build environment.
+    - VERSION: Version number of the build.
+    - GIT_SHA: Git commit hash of the build.
+    - BUILD_TIMESTAMP_ISO8601: Timestamp of the build in ISO8601 format.
+
+    Args:
+        name: The name of this target.
+        base: The base image to use.
+        entrypoint: The entrypoint for the container.
+        tars: The tarballs to include in the image.
+        annotations: The annotations to add to the image.
+    """
+    expand_template(
+        name = name + "_annotations",
+        out = "_stamped.annotations.txt",
+        template = [
+            "org.opencontainers.image.source=https://github.com/pddg/go-bazel-playground",
+            "org.opencontainers.image.version=nightly",
+            "org.opencontainers.image.revision=devel",
+            "org.opencontainers.image.created=1970-01-01T00:00:00Z",
+        ] + [
+            "{}={}".format(key, value) for (key, value) in annotations.items()
+        ],
+        stamp_substitutions = {
+            "devel": "{{GIT_SHA}}",
+            "nightly": "{{VERSION}}",
+            "1970-01-01T00:00:00Z": "{{BUILD_TIMESTAMP_ISO8601}}",
+        },
+    )
+    oci_image(
+        name = name,
+        base = base,
+        entrypoint = entrypoint,
+        tars = tars,
+        annotations = ":" + name + "_annotations",
+        labels = ":" + name + "_annotations",
+    )
+
+
+def oci_push_with_version(
+    name,
+    image,
+    repository,
+):
+    """oci_push_with_stamped_tags pushes an image with stamped tags.
+
+    Args:
+        name: The name of this target.
+        image: The image to push.
+        repository: The repository to push the image to.
+    """
+    expand_template(
+        name = name + "_tags",
+        out = "_stamped.tags.txt",
+        template = ["latest"],
+        stamp_substitutions = {
+            "latest": "{{VERSION}}",
+        },
+    )
+    oci_push(
+        name = name,
+        image = image,
+        repository = repository,
+        remote_tags = ":" + name + "_tags",
+    )
+```
+
+### Pros and Cons
+
+- Pros
+  - バージョン番号が自動で生成されるため、人為的なミスが発生しにくい。
+  - 重複することがないバージョン番号が生成される。
+  - 新しいバージョンのリリース時には単に `--stamp` オプションを指定するだけで良い
+- Cons
+  - そのアプリケーションの機能的な変更内容を反映しない
+  - 仕組みが複雑になる
+
+## Conclusion
+
+バージョン情報を埋め込む方法として、手動での指定と自動での生成の2つを紹介した。
+
+手動での指定は一般的なバージョニング手法であるが、人為的なミスが発生しやすい。
+自動での生成はそのようなミスを防ぐことが出来るが、そのアプリケーションの機能的な変更内容を反映しないという問題がある。
+
+どちらを採用するかはそのアプリケーションの性質や開発体制によるが、自動での生成を採用することでバージョン情報の管理を自動化できる。
