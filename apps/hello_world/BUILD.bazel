@@ -8,7 +8,7 @@ go_binary(
     embed = [":hello_world_lib"],
     visibility = ["//visibility:public"],
     x_defs = {
-        "Version": VERSION,
+        "Version": "{VERSION_WITH_HASH}",
     },
 )
 
