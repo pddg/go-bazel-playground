@@ -1,0 +1,26 @@
+name: Weekly Tag
+
+on:
+  schedule:
+    # Sunday 15:00 UTC = Monday 00:00 JST 
+    - cron: '0 15 * * 0'
+
+permissions:
+  # GitHub Token can create tags
+  contents: write
+
+jobs:
+  tagger:
+    runs-on: ubuntu-latest
+    steps:
+    - name: tag HEAD with date +%G.%V
+      run: |
+        curl --request POST \
+            --url https://api.github.com/repos/${{ github.repository }}/git/refs \
+            --header 'authorization: Bearer ${{ secrets.GITHUB_TOKEN }}' \
+            --data @- << EOF
+        {
+            "ref": "refs/tags/$(date +%G.%V)",
+            "sha": "${{ github.sha }}"
+        }
+        EOF
