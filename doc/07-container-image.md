@@ -731,3 +731,11 @@ docker run --rm ghcr.io/pddg/go-bazel-playground-fortune-cowsay:latest hello
                 ||----w |
                 ||     ||
 ```
+
+## Conclusion
+
+rules_ociを使ってGoアプリケーションをビルドし、コンテナイメージに載せ、レジストリにプッシュする方法を紹介した。
+rules_ociはOCI Image Specに準拠したコンテナイメージをビルドするためのBazelルールを提供しており、distrolessなどの公開されているイメージをベースイメージとして利用できる。
+また、手動で異なるアーキテクチャ向けのビルドターゲットを追加したり、transitionを活用することでマルチアーキテクチャイメージも容易に作成できる。
+
+パッケージのインストールはrules_distrolessを使うことで簡単に実現できる。これにより、distrolessコンテナイメージにも後から必要なパッケージを追加できる。
