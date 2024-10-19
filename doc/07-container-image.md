@@ -21,9 +21,9 @@ rules_ociはdockerコマンドを使わないため、イメージをビルド�
 
 これを使って、イメージをビルドする。`apps/hello_world/BUILD.bazel`に記述する。
 
-!!! important
-    以下ではホストのアーキテクチャがamd64であることを仮定しているが、もし異なる場合は適切なアーキテクチャにする。
-    なお、macOSではRosetta2によりarm64なホストのDocker Desktopからamd64なコンテナを実行できる。
+> [!IMPORTANT]
+>    以下ではホストのアーキテクチャがamd64であることを仮定しているが、もし異なる場合は適切なアーキテクチャにする。
+>    なお、macOSではRosetta2によりarm64なホストのDocker Desktopからamd64なコンテナを実行できる（エラーになる場合もある）。
 
 ```python:apps/hello_world/BUILD.bazel
 load("@rules_pkg//:pkg.bzl", "pkg_tar")
