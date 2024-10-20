@@ -48,7 +48,7 @@ func main() {
 ```
 
 このままではビルドエラーが発生する。これは `reverse` パッケージが `BUILD.bazel` に記述されていないためである。
-gaazleを使って `BUILD.bazel` を更新する。
+gazelleを使って `BUILD.bazel` を更新する。
 
 ```bash
 bazel run //:gazelle
