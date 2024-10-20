@@ -244,7 +244,7 @@ jobs:
             exit 0
           fi
           # bazel run can't handle multiple targets at once
-          printf "%s\n" ${CHANGE_IMAGES} \
+          printf "%s\n" ${CHANGED_IMAGES} \
             | xargs -L1 bazel run --stamp
           # Save the last release commit to cache
           echo "${{ github.sha }}" > /tmp/last-release-commit.txt
