@@ -1,0 +1,45 @@
+name: Setup target-determinator
+description: Setup target-determinator
+inputs:
+  os:
+    description: OS name (e.g. Linux, Darwin ...etc)
+    required: true
+  arch:
+    description: Archtecture name (e.g. amd64, arm64 ...etc)
+    required: true
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        OSNAME_RAW: ${{ inputs.os }}
+        ARCHNAME_RAW: ${{ inputs.arch }}
+      run: |
+        echo "::group::Setup env vars"
+        VERSION=0.28.0
+        REPO="https://github.com/bazel-contrib/target-determinator"
+        OSNAME=$(echo "${OSNAME_RAW}" | awk '{print tolower($0)}')
+        ARCHNAME=$(echo "${ARCHNAME_RAW}" | awk '{print tolower($0)}')
+        echo "VERSION=${VERSION}"
+        echo "REPO=${REPO}"
+        echo "OSNAME=${OSNAME}"
+        echo "ARCHNAME=${ARCHNAME}"
+        echo "::endgroup::"
+
+        echo "::group::Download target-determinator and driver"
+        wget -q -O /tmp/target-determinator "${REPO}/releases/download/v${VERSION}/target-determinator.${OSNAME}.${ARCHNAME}"
+        wget -q -O /tmp/driver "${REPO}/releases/download/v${VERSION}/driver.${OSNAME}.${ARCHNAME}"
+        echo "::endgroup::"
+
+        # TODO: Add checksum/signature verification
+
+        echo "::group::Install target-determinator and driver"
+        chmod +x /tmp/target-determinator
+        chmod +x /tmp/driver
+        mv /tmp/target-determinator /usr/local/bin
+        mv /tmp/driver /usr/local/bin
+
+        target-determinator -version
+        driver -version
+
+        echo "::endgroup::"

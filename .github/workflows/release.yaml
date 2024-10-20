@@ -1,0 +1,76 @@
+name: Release
+
+on:
+  workflow_call:
+    inputs:
+      last_release_commit:
+        type: string
+        description: 'The commit hash/tag of the last release.'
+        required: false
+
+concurrency:
+  # Only one instance of this workflow can run at a time
+  # https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/control-the-concurrency-of-workflows-and-jobs
+  group: release
+
+jobs:
+  container_image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          # Use Treeless clone to speed up the checkout
+          # https://github.blog/jp/2021-01-13-get-up-to-speed-with-partial-clone-and-shallow-clone/
+          filter: tree:0
+      - uses: actions/cache/restore@v4
+        with:
+          key: ${{ runner.os }}-release-cache-${{ github.sha }}
+          path: /tmp/last-release-commit.txt
+          restore-keys: |
+            ${{ runner.os }}-release-cache-
+      - name: Get last release commit
+        env:
+          LAST_RELEASE_COMMIT: ${{ github.event.inputs.last_release_commit }}
+        run: |
+          if [ -z "${LAST_RELEASE_COMMIT}" ]; then
+            # If there is no input, use the cache
+            if [ -f /tmp/last-release-commit.txt ]; then
+              LAST_RELEASE_COMMIT=$(cat /tmp/last-release-commit.txt)
+            else
+              # If there is no cache, use the latest tag as the last release commit
+              LAST_RELEASE_COMMIT=$(git describe --tags --match="[0-9][0-9][0-9][0-9].[0-9][0-9]" --abbrev=0)
+            fi
+          fi
+          echo "LAST_RELEASE_COMMIT=${LAST_RELEASE_COMMIT}" >> $GITHUB_ENV
+      - uses: ./.github/actions/setup-target-determinator
+        with:
+          os: linux
+          arch: amd64
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Push changed container images
+        run: |
+          target-determinator \
+            -bazel-opts=--config=ci \
+            -targets='kind("oci_push", //...)' \
+            ${LAST_RELEASE_COMMIT} \
+            | tee /tmp/changed-images.txt
+          if [ -z "$(cat /tmp/changed-images.txt)" ]; then
+            echo "No changed images found."
+            exit 0
+          fi
+          bazel run \
+            --stamp \
+            --config=ci \
+            "$(cat /tmp/changed-images.txt)"
+          # Save the last release commit to cache
+          echo "${{ github.sha }}" > /tmp/last-release-commit.txt
+      - uses: actions/cache/save@v4
+        with:
+          key: ${{ runner.os }}-release-cache-${{ github.sha }}
+          path: /tmp/last-release-commit.txt
