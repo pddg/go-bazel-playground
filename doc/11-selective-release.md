@@ -202,7 +202,7 @@ jobs:
           fetch-tags: true
           # Use blob less clone to speed up the checkout
           # https://github.blog/jp/2021-01-13-get-up-to-speed-with-partial-clone-and-shallow-clone/
-          filter: blob:0
+          filter: blob:none
       - uses: actions/cache/restore@v4
         with:
           key: ${{ runner.os }}-release-cache-${{ github.sha }}
