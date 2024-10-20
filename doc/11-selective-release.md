@@ -235,7 +235,6 @@ jobs:
       - name: Push changed container images
         run: |
           target-determinator \
-            -bazel-opts=--config=ci \
             -targets='kind("oci_push", //...)' \
             ${LAST_RELEASE_COMMIT} \
             | tee /tmp/changed-images.txt
@@ -245,7 +244,6 @@ jobs:
           fi
           bazel run \
             --stamp \
-            --config=ci \
             "$(cat /tmp/changed-images.txt)"
           # Save the last release commit to cache
           echo "${{ github.sha }}" > /tmp/last-release-commit.txt
