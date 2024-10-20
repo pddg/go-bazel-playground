@@ -126,7 +126,7 @@ jobs:
 
 そしてpull requestがマージされた時に、変更があったターゲットのみをリリースするジョブを追加する。そのためにtarget-determinatorをセットアップするアクションを作る。
 
-```yaml:.github/actions/setup-target-determinator.yaml
+```yaml:.github/actions/setup-target-determinator/action.yaml
 name: Setup target-determinator
 description: Setup target-determinator
 inputs:
