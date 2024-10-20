@@ -6,7 +6,7 @@ Protocol Buffersはデータの構造を定義するための言語にIDL（Inte
 
 ## Setup toolchains_protoc
 
-Protocol Buffersのリポジトリを直接依存に加えると、少し変更がある度に再ビルドが発生し、これが非常に遅い。
+Protocol Buffersのリポジトリを直接依存に加えると、少し変更がある度にprotobufのソースからの再ビルドが発生し、これが非常に遅い。
 Bazel 7.0から実装された `--incompatible_enable_proto_toolchain_resolution` と [toolchains_protoc](https://github.com/aspect-build/toolchains_protoc)を使うことで、コンパイル済みのバイナリを使ってビルド出来るようになる。
 
 `MODULE.bazel` に以下の内容を追記する。
@@ -317,3 +317,62 @@ INFO: Build completed successfully, 10 total actions
 INFO: Running command line: bazel-bin/apps/greeter/cmd/greeter-client/greeter-client_/greeter-client user
 Hello, world
 ```
+
+## Build protobuf from source
+
+toolchains_protocを使わずに、Protocol Buffersのリポジトリを直接依存に加える方法もある。
+https://registry.bazel.build/modules/protobuf
+
+`MODULE.bazel` を以下の様に修正する。
+
+```diff:MODULE.bazel
+diff --git a/MODULE.bazel b/MODULE.bazel
+index ac9477a..d4ef002 100644
+--- a/MODULE.bazel
++++ b/MODULE.bazel
+@@ -52,11 +52,4 @@ use_repo(apt, "bookworm")
+ 
+ bazel_dep(name = "toolchains_protoc", version = "0.3.3")
+ 
+-protoc = use_extension("@toolchains_protoc//protoc:extensions.bzl", "protoc")
+-protoc.toolchain(
+-    google_protobuf = "com_google_protobuf",
+-    version = "v28.0",
+-)
+-use_repo(protoc, "com_google_protobuf", "toolchains_protoc_hub")
+-
+-register_toolchains("@toolchains_protoc_hub//:all")
++bazel_dep(name = "protobuf", version = "28.2")
+```
+
+`.bazelrc` を以下の様に修正する。
+
+```diff:.bazelrc
+diff --git a/.bazelrc b/.bazelrc
+index 3c72c74..a034735 100644
+--- a/.bazelrc
++++ b/.bazelrc
+@@ -2,4 +2,3 @@ test --test_output=errors --test_verbose_timeout_warnings
+ # Use credential helper to push image
+ common --credential_helper=ghcr.io=%workspace%/build_tools/auth/docker-credential-gh
+ 
+-common --incompatible_enable_proto_toolchain_resolution
+```
+> [!Note]
+>    Bazel 8.0からは `proto_library` などのルールがBazel組み込みおよび `rules_proto` からの提供がdeprecateされ、protobufのリポジトリに移管されることが決まっている。  
+>    https://bazel.build/about/roadmap#migration-android,
+>
+>    先んじてrules_protoのリポジトリではdeprecateが宣言されている。 
+>    https://github.com/bazelbuild/rules_proto
+>
+>    今後のBazelのリリースでは、protobufを扱う方法が変わっていく可能性が高い。
+
+## Conclusion
+
+Bazelを用いてprotoファイルをコンパイルし、gRPCサーバとそのクライアントを実装した。
+Protocを取り扱うために以下の二つの方法がある。
+
+- `--incompatible_enable_proto_toolchain_resolution` を有効にし、 `toolchains_protoc` を使ってコンパイル済みのバイナリを使う
+- Protocol Buffersのリポジトリを直接依存に加え、ソースからビルドする
+
+また、今後Bazel本体やrules_protoからのprotobuf関連のルール提供はdeprecateされ、protobufのリポジトリに移管されることが決まっている。今後の動向次第では、これらの方法が変わる可能性がある。

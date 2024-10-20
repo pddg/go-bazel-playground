@@ -231,15 +231,15 @@ bazel run //:gazelle
 
 実際にビルド時の依存からも取り除かれており、cqueryで依存関係を解析すると、linux向けにはこの依存が含まれないことがわかる。
 
-!!! note
-    `bazel query` は `select` を解決しないため、これによって解析される依存はもっとも広い範囲のものを示す。今回の場合、queryで解析すると異なる結果を示す。
-    ```
-    ❯ bazel query 'filter("^//internal", kind("go_library", deps(//apps/hello_world:hello_world_linux_amd64)))' 
-    //internal/reverse:reverse
-    //internal/windows:windows
-    ```
-    cqueryはbazelによる解析が完了した後の状態に対するクエリを発行するため、platformによる `select` を解決した後の結果を返す。
-    https://bazel.build/query/cquery
+> [!NOTE]
+>    `bazel query` は `select` を解決しないため、これによって解析される依存はもっとも広い範囲のものを示す。今回の場合、queryで解析すると異なる結果を示す。
+>    ```
+>    ❯ bazel query 'filter("^//internal", kind("go_library", deps(//apps/hello_world:hello_world_linux_amd64)))' 
+>    //internal/reverse:reverse
+>    //internal/windows:windows
+>    ```
+>    cqueryはbazelによる解析が完了した後の状態に対するクエリを発行するため、platformによる `select` を解決した後の結果を返す。
+>    https://bazel.build/query/cquery
 
 ```
 ❯ bazel cquery 'filter("^//internal", kind("go_library", deps(//apps/hello_world:hello_world_windows_amd64)))'             

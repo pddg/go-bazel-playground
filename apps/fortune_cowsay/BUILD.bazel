@@ -1,3 +1,4 @@
+load("@aspect_bazel_lib//lib:expand_template.bzl", "expand_template")
 load("@rules_oci//oci:defs.bzl", "oci_image", "oci_image_index", "oci_load", "oci_push")
 load("//build_tools/transitions:multi_arch.bzl", "multi_arch")
 
@@ -6,11 +7,25 @@ PACKAGES = [
     "@bookworm//fortunes",
 ]
 
+expand_template(
+    name = "image_annotations",
+    out = "_stamped.annotations.txt",
+    stamp_substitutions = {
+        "devel": "{{GIT_SHA}}",
+        "nightly": "{{VERSION}}",
+        "1970-01-01T00:00:00Z": "{{BUILD_TIMESTAMP_ISO8601}}",
+    },
+    template = [
+        "org.opencontainers.image.source=https://github.com/pddg/go-bazel-playground",
+        "org.opencontainers.image.version=nightly",
+        "org.opencontainers.image.revision=devel",
+        "org.opencontainers.image.created=1970-01-01T00:00:00Z",
+    ],
+)
+
 oci_image(
     name = "image",
-    annotations = {
-        "org.opencontainers.image.source": "https://github.com/pddg/go-bazel-playground",
-    },
+    annotations = ":image_annotations",
     base = "@distroless_static_debian12",
     entrypoint = ["/usr/games/cowsay"],
     tars = select({
@@ -57,9 +72,18 @@ oci_load(
     repo_tags = [REPOSITORY + ":latest"],
 )
 
+expand_template(
+    name = "image_tags",
+    out = "_stamped.tags.txt",
+    stamp_substitutions = {
+        "latest": "{{VERSION}}",
+    },
+    template = ["latest"],
+)
+
 oci_push(
     name = "image_push",
     image = ":image_index",
-    remote_tags = ["latest"],
+    remote_tags = ":image_tags",
     repository = REPOSITORY,
 )

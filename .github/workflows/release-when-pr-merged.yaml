@@ -1,0 +1,17 @@
+name: Release when PR merged
+
+on:
+  pull_request:
+    types:
+      - closed
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  release:
+    uses: ./.github/workflows/release.yaml
+    if: github.event.pull_request.merged == true
+    with:
+      last_release_commit: ${{ github.event.pull_request.base.sha }}

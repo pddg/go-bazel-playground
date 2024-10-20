@@ -1,5 +1,2 @@
 test --test_output=errors --test_verbose_timeout_warnings
-# Use credential helper to push image
-common --credential_helper=ghcr.io=%workspace%/build_tools/auth/docker-credential-gh
-
-common --incompatible_enable_proto_toolchain_resolution
+build --workspace_status_command=build_tools/integrations/status.sh

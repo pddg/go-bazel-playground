@@ -21,9 +21,9 @@ rules_ociはdockerコマンドを使わないため、イメージをビルド�
 
 これを使って、イメージをビルドする。`apps/hello_world/BUILD.bazel`に記述する。
 
-!!! important
-    以下ではホストのアーキテクチャがamd64であることを仮定しているが、もし異なる場合は適切なアーキテクチャにする。
-    なお、macOSではRosetta2によりarm64なホストのDocker Desktopからamd64なコンテナを実行できる。
+> [!IMPORTANT]
+>    以下ではホストのアーキテクチャがamd64であることを仮定しているが、もし異なる場合は適切なアーキテクチャにする。
+>    なお、macOSではRosetta2によりarm64なホストのDocker Desktopからamd64なコンテナを実行できる（エラーになる場合もある）。
 
 ```python:apps/hello_world/BUILD.bazel
 load("@rules_pkg//:pkg.bzl", "pkg_tar")
@@ -546,9 +546,8 @@ pudding@oryza:~$
 
 ### Tips: Use credential helper
 
-ホスト環境にdockerを入れたくないなどの理由がある場合、それを使わずrules_ociにクレデンシャルを提供する credential helper を実装してもよい。
-
-例えばghコマンドを利用した認証情報の取得を行うcredential helperの参考実装が存在する。  
+ローカル環境で `ghcr.io` に `docker login` する場合Personal Access Tokenを発行する必要がある。これは扱いが難しい。できればghコマンドで認証を通せると良いが、 `gh` コマンド自体にはそのような機能が存在しない。
+しかし、ghコマンドを利用した認証情報の取得を行うcredential helperの参考実装が存在する。  
 https://gist.github.com/mislav/e154d707db230dc882d7194ec85d79f6
 
 これを利用すると、docker loginを行わずghコマンドから提供された認証情報のみでプッシュが可能になる。
@@ -558,11 +557,17 @@ mkdir build_tools/auth
 wget -O build_tools/auth/docker-credential-gh https://gist.githubusercontent.com/mislav/e154d707db230dc882d7194ec85d79f6/raw/46788c71697928b69b303373fb1a32b1a6d1eeec/docker-credential-gh
 chmod +x build_tools/auth/docker-credential-gh
 
-# .bazelrcにcredential helperの設定を追記
-cat << EOF >> .bazelrc
-# Use credential helper to push image
-common --credential_helper=ghcr.io=%workspace%/build_tools/auth/docker-credential-gh
-EOF
+# PATHが通っているディレクトリにsymlinkを貼る
+sudo ln -s $(pwd)/build_tools/auth/docker-credential-gh /usr/local/bin/docker-credential-gh
+
+# ~/.docker/config.json にcredential helperを設定する
+cat ~/.docker/config.json \
+  | jq '.credsHelpers["ghcr.io"] = "gh" | .credsHelpers["docker.pkg.github.com"] = "gh"' \
+  > ~/.docker/config.json.tmp
+
+# 一旦バックアップを取ってから上書きする。問題があれば戻す。
+mv ~/.docker/config.json ~/.docker/config.json.bak
+mv ~/.docker/config.json.tmp ~/.docker/config.json
 
 # ~/.docker/config.json から認証情報を消しておく。
 docker logout ghcr.io
@@ -575,6 +580,8 @@ gh auth refresh --scopes read:packages,write:packages
 # credential helperを使ってプッシュする
 bazel run //apps/hello_world:image_push
 ```
+
+しかし通常、手元の環境からイメージをpushする必要は無く、CIなどからpushできるようにすべきだろう。GitHub Actionsでは `GITHUB_TOKEN` に正しいpermissionを設定することで、簡単に `docker login` できるようになる。
 
 ## Tips: Install deb package
 
@@ -724,3 +731,11 @@ docker run --rm ghcr.io/pddg/go-bazel-playground-fortune-cowsay:latest hello
                 ||----w |
                 ||     ||
 ```
+
+## Conclusion
+
+rules_ociを使ってGoアプリケーションをビルドし、コンテナイメージに載せ、レジストリにプッシュする方法を紹介した。
+rules_ociはOCI Image Specに準拠したコンテナイメージをビルドするためのBazelルールを提供しており、distrolessなどの公開されているイメージをベースイメージとして利用できる。
+また、手動で異なるアーキテクチャ向けのビルドターゲットを追加したり、transitionを活用することでマルチアーキテクチャイメージも容易に作成できる。
+
+パッケージのインストールはrules_distrolessを使うことで簡単に実現できる。これにより、distrolessコンテナイメージにも後から必要なパッケージを追加できる。

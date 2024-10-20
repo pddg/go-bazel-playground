@@ -5,6 +5,9 @@ go_binary(
     name = "hello_world",
     embed = [":hello_world_lib"],
     visibility = ["//visibility:public"],
+    x_defs = {
+        "Version": "{VERSION_WITH_HASH}",
+    },
 )
 
 go_library(
@@ -31,9 +34,6 @@ go_library(
 go_oci_image(
     name = "image",
     srcs = [":hello_world"],
-    annotations = {
-        "org.opencontainers.image.source": "https://github.com/pddg/go-bazel-playground",
-    },
     base = "@distroless_static_debian12",
     entrypoint = ["/hello_world"],
     repository = "ghcr.io/pddg/go-bazel-playground-hello-world",
