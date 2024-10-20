@@ -278,3 +278,72 @@ jobs:
 ```
 
 これで、変更があったターゲットのみをリリースするワークフローが完成した。
+
+### Tips: pull_requestのclose eventはトリガーされないことがある
+
+Refs: https://zenn.dev/shunsuke_suzuki/scraps/0bf756d44c22ad
+
+基本的には今はマージされる度に実行され、monorepoであればマージは頻繁に行われることが予想されることから、問題になることは少ないと考えられる。
+しかし、手動でこのリリースをキックする方法を提供しておくことは便利かもしれない。
+
+```yaml:.github/workflows/release-manually.yml
+name: Release manually
+
+on:
+  workflow_dispatch:
+    inputs:
+      last_release_commit:
+        description: 'The commit hash/tag of the last release.'
+        required: false
+
+permissions:
+  contents: read
+  packages: write
+
+# Concurrency should not be enabled for manual triggers.
+# It will be deadlock if the same value is set as concurrency group for both of caller/called workflow.
+# concurrency:
+#   group: release
+
+jobs:
+  release:
+    uses: ./.github/workflows/release.yaml
+    with:
+      last_release_commit: ${{ github.event.inputs.last_release_commit }}
+```
+
+### 定期リリースにする
+
+現在はマージされるごとにリリースのジョブが走るようになっている。各リリースジョブは変更内容が入れ違いにならなったり重複しないよう、concurrency groupによって並列度1に固定されている。
+そのため、トランクベース開発のようなスタイルの開発では頻繁なマージがこのリリースジョブの実行により律速される可能性がある。
+
+結局1回のリリースジョブにかかる時間によって律速されるなら、定期的なリリースジョブを走らせた方が効率が良いかも知れない。
+
+```yaml:.github/workflows/release-periodically.yml
+name: Release periodically
+
+on:
+  schedule:
+    # Every day at 00:00 UTC
+    - cron: '0 0 * * *'
+
+permissions:
+  contents: read
+  packages: write
+
+# Concurrency should not be enabled for manual triggers.
+# It will be deadlock if the same value is set as concurrency group for both of caller/called workflow.
+# concurrency:
+#   group: release
+
+jobs:
+  release:
+    uses: ./.github/workflows/release.yaml
+```
+
+上記の例では毎日一回リリースをトリガーするようになっているが、必要に応じてこの期間を変更できる。
+例えば毎日1時間ごとにリリースをトリガーすることも可能である。
+
+> [!WARNING]
+> ただしGitHub Actionsのscheduleトリガーは実行時間の保証をしていない。
+> そのため、非常に短期間での実行などは思ったように実行できない可能性がある。

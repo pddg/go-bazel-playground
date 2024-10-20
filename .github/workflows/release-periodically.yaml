@@ -1,0 +1,19 @@
+name: Release periodically
+
+on:
+  schedule:
+    # Every day at 00:00 UTC
+    - cron: '0 0 * * *'
+
+permissions:
+  contents: read
+  packages: write
+
+# Concurrency should not be enabled for manual triggers.
+# It will be deadlock if the same value is set as concurrency group for both of caller/called workflow.
+# concurrency:
+#   group: release
+
+jobs:
+  release:
+    uses: ./.github/workflows/release.yaml
