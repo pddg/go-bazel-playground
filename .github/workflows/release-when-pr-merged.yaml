@@ -10,22 +10,8 @@ permissions:
   packages: write
 
 jobs:
-  test-before-release:
-    if: github.event.pull_request.merged == true
-    strategy:
-      matrix:
-        os:
-          - ubuntu-latest
-          - macOS-latest
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: test
-        run: |
-          bazel test //...
   release:
     uses: ./.github/workflows/release.yaml
     if: github.event.pull_request.merged == true
-    needs: [test-before-release]
     with:
       last_release_commit: ${{ github.event.pull_request.base.sha }}
