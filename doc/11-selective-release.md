@@ -238,13 +238,14 @@ jobs:
             -targets='kind("oci_push", //...)' \
             ${LAST_RELEASE_COMMIT} \
             | tee /tmp/changed-images.txt
-          if [ -z "$(cat /tmp/changed-images.txt)" ]; then
+          CHANGED_IMAGES=$(cat /tmp/changed-images.txt)
+          if [ -z "${CHANGED_IMAGES}" ]; then
             echo "No changed images found."
             exit 0
           fi
           bazel run \
             --stamp \
-            "$(cat /tmp/changed-images.txt)"
+            ${CHANGED_IMAGES}
           # Save the last release commit to cache
           echo "${{ github.sha }}" > /tmp/last-release-commit.txt
       - uses: actions/cache/save@v4
