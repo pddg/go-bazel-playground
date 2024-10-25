@@ -1,2 +1,3 @@
 test --test_output=errors --test_verbose_timeout_warnings
-build --workspace_status_command=build_tools/integrations/status.sh
+build:release --workspace_status_command=build_tools/integrations/status.sh
+build:release --stamp
