@@ -59,13 +59,13 @@ spec:
               value: "0.0.0.0:9092"
             # .htpasswdファイルを指定することでBasic認証を有効にできる
             # 注意：HTTPSを使わない場合、パスワードが平文で送信されるため、セキュリティ上のリスクがある
-            - name: BAZEL_REMOTE_HTPASSWD_FILE
-              value: /etc/bazel-remote/.htpasswd
+            # - name: BAZEL_REMOTE_HTPASSWD_FILE
+            #   value: /etc/bazel-remote/.htpasswd
             # TLS証明書を指定することでHTTPSを有効にできる。
-            - name: BAZEL_REMOTE_TLS_CERT_FILE
-              value: /var/ssl/tls.crt
-            - name: BAZEL_REMOTE_TLS_KEY_FILE
-              value: /var/ssl/tls.key
+            # - name: BAZEL_REMOTE_TLS_CERT_FILE
+            #   value: /var/ssl/tls.crt
+            # - name: BAZEL_REMOTE_TLS_KEY_FILE
+            #   value: /var/ssl/tls.key
             # S3バックエンドを使う場合
             # 接続に利用するエンドポイントを指定する。
             - name: BAZEL_REMOTE_S3_ENDPOINT
@@ -96,15 +96,9 @@ spec:
                   name: bazel-remote-s3
                   key: secret_access_key
       volumes:
-        - name: tls
-          secret:
-            secretName: bazel-remote-tls
         - name: bazel-remote-s3
           secret:
             secretName: bazel-remote-s3
-        - name: htpasswd
-          secret:
-            secretName: bazel-remote-htpasswd
   volumeClaimTemplates:
     - metadata:
         name: cache
