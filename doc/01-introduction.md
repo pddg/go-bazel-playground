@@ -12,9 +12,9 @@ ARTIFACT="bazelisk-linux-$(uname -m | sed 's/x86_64/amd64/')"
 wget -O bazelisk \
   "https://github.com/bazelbuild/bazelisk/releases/latest/download/${ARTIFACT}"
 chmod +x bazelisk
-sudo mv bazel /usr/local/bin
+sudo mv bazelisk /usr/local/bin
 # Install as `bazel`
-sudo ln -s /usr/local/bin/bazel /usr/local/bin/bazelisk
+sudo ln -s /usr/local/bin/bazelisk /usr/local/bin/bazel
 
 # macOS
 # This will install `bazelisk` and alias for it named`bazel`
