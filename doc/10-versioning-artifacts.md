@@ -183,24 +183,43 @@ echo "VERSION_WITH_HASH ${VERSION_WITH_HASH}"
 echo "VERSION $(echo ${VERSION_WITH_HASH} | cut -d+ -f1)"
 # Show git hash only
 echo "GIT_SHA $(echo ${VERSION_WITH_HASH} | cut -d+ -f2)"
+
+BUILD_TIMESTAMP=${BUILD_TIMESTAMP:-$(date +%s)}
+
+# Show build timestamp in ISO8601 format
+if [ "$(uname)" == "Darwin" ]; then
+  BUILD_ISO8601=$(date -u -r "$BUILD_TIMESTAMP" +"%Y-%m-%dT%H:%M:%SZ")
+else
+  BUILD_ISO8601=$(date -u -d "@$BUILD_TIMESTAMP" +"%Y-%m-%dT%H:%M:%SZ")
+fi
+echo "BUILD_TIMESTAMP_ISO8601 $BUILD_ISO8601"
 EOF
-chmod +x build_tools/integrations/version.sh
+chmod +x build_tools/integrations/status.sh
 ```
 
 このスクリプトを実行すると以下の様に表示される。
 
 ```sh
-❯ ./build_tools/integrations/version.sh
-VERSION_WITH_HASH 2024.42.8+fe2517d
-VERSION 2024.42.8
-GIT_SHA fe2517d
+❯ ./build_tools/integrations/status.sh
+VERSION_WITH_HASH 2024.42.41+eba4d2e
+VERSION 2024.42.41
+GIT_SHA eba4d2e
+BUILD_TIMESTAMP_ISO8601 2024-10-23T13:17:43Z
 ```
 
-Bazelには `--stamp` オプションおよび `--workspace_status_command` オプションを用いることで、ビルド時に任意の情報を埋め込む機能が存在する。これらを利用して動的に生成したこのバージョンを埋め込む。
+Bazelには `--stamp` オプションおよび `--workspace_status_command` オプションを用いることで、ビルド時に任意の情報を埋め込む機能が存在する。これらを利用して動的に生成したこのバージョンを埋め込める。
 
 ```sh
-echo 'build --workspace_status_command=build_tools/integrations/version.sh' >> .bazelrc
+cat << 'EOF' >> .bazelrc
+build:release --workspace_status_command=build_tools/integrations/version.sh
+build:release --stamp
+EOF
 ```
+
+> [!TIP]
+> `.bazelrc` において `build` と `build:release` はそれぞれ異なる設定を持てる。
+> `:release` を付けた設定を有効化するには、bazelコマンドを実行する際に `--config=release` を指定する。
+> Ref: https://bazel.build/run/bazelrc#config
 
 go_binaryルールに以下の様に設定する。
 
@@ -215,40 +234,21 @@ go_binary(
 )
 ```
 
-これにより、bazelでのビルド時に `build_tools/integrations/version.sh` が実行され、その結果が `Version` として埋め込まれる。
-ただし、これが実行されるとビルドがキャッシュされなくなるため、デフォルトでは埋め込みは行われない。
+これにより、`--config=release` を指定した場合のみビルド時に `build_tools/integrations/status.sh` が実行され、その結果が `Version` として埋め込まれる。
 
 ```sh
-❯ bazel run //apps/hello_world
-INFO: Analyzed target //apps/hello_world:hello_world (0 packages loaded, 0 targets configured).
-INFO: Found 1 target...
-Target //apps/hello_world:hello_world up-to-date:
-  bazel-bin/apps/hello_world/hello_world_/hello_world
-INFO: Elapsed time: 0.161s, Critical Path: 0.01s
-INFO: 1 process: 1 internal.
-INFO: Build completed successfully, 1 total action
-INFO: Running command line: bazel-bin/apps/hello_world/hello_world_/hello_world
-Version: dev
-Hello, World!(761a756f-b8e7-4bc8-93e4-ff5b945ea6e0)
-Reversed: !dlroW ,olleH
-OsName: darwin
-```
-
-`--stamp` オプションを利用することで、workspace_status_commandの結果をバイナリに埋め込める。
-
-```sh
-❯ bazel run --stamp //apps/hello_world
+❯ bazel run --config=release //apps/hello_world
 WARNING: Build option --stamp has changed, discarding analysis cache (this can be expensive, see https://bazel.build/advanced/performance/iteration-speed).
-INFO: Analyzed target //apps/hello_world:hello_world (0 packages loaded, 17633 targets configured).
+INFO: Analyzed target //apps/hello_world:hello_world (0 packages loaded, 17598 targets configured).
 INFO: Found 1 target...
 Target //apps/hello_world:hello_world up-to-date:
   bazel-bin/apps/hello_world/hello_world_/hello_world
-INFO: Elapsed time: 0.690s, Critical Path: 0.29s
+INFO: Elapsed time: 0.952s, Critical Path: 0.19s
 INFO: 2 processes: 1 internal, 1 darwin-sandbox.
 INFO: Build completed successfully, 2 total actions
 INFO: Running command line: bazel-bin/apps/hello_world/hello_world_/hello_world
-Version: 2024.42.8+fe2517d
-Hello, World!(05fe0467-3613-4c5e-bc3c-0ca15f4943db)
+Version: 2024.42.41+eba4d2e
+Hello, World!(a514029c-e0a0-4227-8fbd-dd06483b6e04)
 Reversed: !dlroW ,olleH
 OsName: darwin
 ```
@@ -312,23 +312,23 @@ oci_image(
 これを使ってイメージをpushする。
 
 ```sh
-bazel run //apps/fortune_cowsay:image_push
+bazel run --config=release //apps/fortune_cowsay:image_push
 ```
 
-https://github.com/pddg/go-bazel-playground/pkgs/container/go-bazel-playground-fortune-cowsay/291870304?tag=2024.42.8
+https://github.com/pddg/go-bazel-playground/pkgs/container/go-bazel-playground-fortune-cowsay/294968656?tag=2024.42.41
 
 annotationsが正しいかを確認する。
 
 ```sh
 ❯ docker buildx imagetools inspect \
-    ghcr.io/pddg/go-bazel-playground-fortune-cowsay:2024.42.8@sha256:c9cb4af3aa8b0987924e895f628b57ed779bd9e59d6b794dc38c2d889d55aa3c \
+    ghcr.io/pddg/go-bazel-playground-fortune-cowsay:2024.42.41@sha256:9ed000703678f09ad8274effda8fcdd2bf674a49e77b02bd17d9b216b2e8e166 \
     --raw \
     | jq -r .annotations
 {
   "org.opencontainers.image.source": "https://github.com/pddg/go-bazel-playground",
-  "org.opencontainers.image.version": "2024.42.8",
-  "org.opencontainers.image.revision": "fe2517d",
-  "org.opencontainers.image.created": "2024-10-19T11:59:12Z"
+  "org.opencontainers.image.version": "2024.42.41",
+  "org.opencontainers.image.revision": "eba4d2e",
+  "org.opencontainers.image.created": "2024-10-25T04:02:32Z"
 }
 ```
 
@@ -424,7 +424,7 @@ def oci_push_with_version(
 - Pros
   - バージョン番号が自動で生成されるため、人為的なミスが発生しにくい。
   - 重複することがないバージョン番号が生成される。
-  - 新しいバージョンのリリース時には単に `--stamp` オプションを指定するだけで良い
+  - 新しいバージョンのリリース時には単に `--config=release` オプションを指定するだけで良い
 - Cons
   - そのアプリケーションの機能的な変更内容を反映しない
   - 仕組みが複雑になる
