@@ -1,3 +1,22 @@
 test --test_output=errors --test_verbose_timeout_warnings
 build:release --workspace_status_command=build_tools/integrations/status.sh
 build:release --stamp
+
+# Use static PATH and  LD_LIBRARY_PATH for builds to ensure reproducibility
+build --incompatible_strict_action_env=true
+
+common --enable_platform_specific_config
+
+build --noexperimental_check_external_repository_files
+fetch --noexperimental_check_external_repository_files
+query --noexperimental_check_external_repository_files
+
+build --reuse_sandbox_directories
+
+build --nolegacy_external_runfiles
+
+build --nobuild_runfile_links
+
+coverage --build_runfile_links
+
+build --noexperimental_action_cache_store_output_metadata
