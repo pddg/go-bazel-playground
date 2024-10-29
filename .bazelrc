@@ -5,9 +5,6 @@ build:release --stamp
 # Use static PATH and  LD_LIBRARY_PATH for builds to ensure reproducibility
 build --incompatible_strict_action_env=true
 
-# Prefer IPv6 when using bazel modules
-startup --host_jvm_args=-Djava.net.preferIPv6Addresses=true
-
 common --enable_platform_specific_config
 
 build --noexperimental_check_external_repository_files
